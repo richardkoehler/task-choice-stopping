@@ -15,23 +15,22 @@
 from __future__ import absolute_import, annotations, division
 
 import pathlib
+import time
 from io import TextIOWrapper
 
 import numpy as np
 import psychopy
 from packaging.version import Version
 from psychopy import core, data, event, gui, logging, visual
-from psychopy.constants import FINISHED
 from psychopy.hardware import keyboard
 
-logging.console.setLevel(logging.INFO)
 NEW_PSYCHOPY = Version(psychopy.__version__) >= Version("2024.3")
 
 
 def setupExperiment() -> dict[str, str]:
     # __________________________________________________________________
     # Get input from participant and prepare data file to store behavioural results
-    expName = "SSCTT"
+    expName = "choice-stopping"
     expInfo = {"participant": "Use the same UNIQUE ID everywhere"}
     dlg = gui.DlgFromDict(dictionary=expInfo, sortKeys=False, title=expName)
     if not dlg.OK:
@@ -58,7 +57,7 @@ def setupLogging(filename: pathlib.Path):
         Text stream to receive inputs from the logging system.
     """
     # this outputs to the screen, not a file
-    logging.console.setLevel(logging.ERROR)
+    logging.console.setLevel(logging.WARNING)
     # save a log file for detail verbose info
     logFile = logging.LogFile(filename.with_suffix(".log"), level=logging.DEBUG)
 
@@ -80,9 +79,9 @@ def setupWindow(expInfo: dict[str, str]) -> visual.Window:
         Window to display stimuli in.
     """
     win = visual.Window(
-        size=(1920, 1200),
-        fullscr=False,
-        screen=3,
+        size=(1920, 1080),
+        fullscr=True,
+        screen=1,
         winType="pyglet",
         allowGUI=False,
         allowStencil=False,
@@ -98,7 +97,7 @@ def setupWindow(expInfo: dict[str, str]) -> visual.Window:
     return win
 
 
-def endExperiment(thisExp: data.ExperimentHandler, win: visual.Window | None = None):
+def endExperiment(win: visual.Window | None = None):
     """
     End this experiment, performing final shut down operations.
 
@@ -116,11 +115,10 @@ def endExperiment(thisExp: data.ExperimentHandler, win: visual.Window | None = N
         # and win.timeOnFlip() tasks get executed
         win.flip()
         # mark experiment handler as finished
-    thisExp.status = FINISHED
     logging.flush()
 
 
-def quit(thisExp: data.ExperimentHandler, win: visual.Window | None = None):
+def quit(win: visual.Window | None = None):
     """
     Fully quit, closing the window and ending the Python process.
 
@@ -129,7 +127,6 @@ def quit(thisExp: data.ExperimentHandler, win: visual.Window | None = None):
     win : psychopy.visual.Window
         Window to close.
     """
-    thisExp.abort()  # or data files will save again on exit
     # make sure everything is closed down
     if win is not None:
         # Flip one final time so any remaining win.callOnFlip()
@@ -141,43 +138,50 @@ def quit(thisExp: data.ExperimentHandler, win: visual.Window | None = None):
 
 
 def draw_and_wait(
-    skip_with_space: visual.TextStim, message: visual.TextStim, win: visual.Window
+    skip_with_space: visual.TextStim,
+    message: visual.TextStim,
+    win: visual.Window,
+    dataFile: TextIOWrapper,
 ):
     message.draw()
     skip_with_space.draw(win)
     win.flip()
-    event.waitKeys(keyList=["space"])
-    event.clearEvents()
+    while True:
+        keys = event.getKeys()
+        if "space" in keys:
+            break
+        elif "escape" in keys:
+            store_and_quit(win=win)
+        time.sleep(0.1)
 
 
-def draw_objects(objects):
+def draw_objects(objects: list):
     for object in objects:
         object.draw()
 
 
-def return_and_delete_rand_idx(array, max_int):
+def return_and_delete_rand_idx(array: list, max_int: int):
     idx = np.random.randint(max_int)
     x = array[idx]
     del array[idx]
     return x
 
 
-def store_and_quit(
-    thisExp: data.ExperimentHandler, win: visual.Window, dataFile: TextIOWrapper
-):
-    dataFile.close()
-    endExperiment(thisExp=thisExp, win=win)
-    quit(thisExp=thisExp, win=win)
+def store_and_quit(win: visual.Window):
+    end_text = "Ende - Vielen Dank!"
+    message = visual.TextStim(win=win, text=end_text, color="white", height=0.07)
+    message.draw()
+    win.flip()
+    time.sleep(1)
+    endExperiment(win=win)
+    quit(win=win)
 
 
-def run(
-    thisExp: data.ExperimentHandler, win: visual.Window, dataFile: TextIOWrapper
-) -> None:
+def run(win: visual.Window, dataFile: TextIOWrapper) -> None:
     np.random.seed(41)  # Change seed in screening session
 
-    func_kwargs = {"win": win, "thisExp": thisExp, "dataFile": dataFile}
+    func_kwargs = {"win": win}
     if NEW_PSYCHOPY:
-        print("Using new keyboard class")
         kb = keyboard.KeyboardDevice(muteOutsidePsychopy=False)
         kb.registerCallback(
             response="escape",
@@ -200,7 +204,6 @@ def run(
     mouse = event.Mouse(visible=True)
     # stop_text = 'STOP'
     # stop_message = visual.TextStim(win=win, text=stop_text, color='white', height=0.1)
-
     objects = [
         visual.Rect(win=win, width=0.15, height=0.15, fillColor="aqua"),
         visual.Rect(win=win, width=0.15, height=0.15, fillColor="yellow"),
@@ -266,14 +269,13 @@ def run(
     # Show welcome screen
     welcome_text = "Willkommen zu unserer Untersuchung!"
     message = visual.TextStim(win=win, text=welcome_text, color="white", height=0.07)
-    draw_and_wait(skip_with_space, message, win)
+    draw_and_wait(skip_with_space, message, win, dataFile)
 
     dataFile.write("Trial,Targets,Condition,Stop,Time,Position_X,Position_Y\n")
-
     # __________________________________________________________________
     # Loop over trials
-
     for trial, condition in zip(range(n_trials), conditions):
+        print(f"Trial no.: {trial}")
         # Target objects, make sure that the position varies from one trial to the next
         positions_tmp = positions.copy()
 
@@ -368,18 +370,6 @@ def run(
 
         win.color = "black"
 
-        print(f"Trial no.: {trial}")
-
-    # Show welcome screen
-    end_text = "Ende - Vielen Dank!"
-    message = visual.TextStim(win=win, text=end_text, color="white", height=0.07)
-    message.draw()
-    win.flip()
-
-    dataFile.close()
-    print("Ending experiment normally.")
-    endExperiment(thisExp=thisExp, win=win)
-
 
 if __name__ == "__main__":
     expInfo = setupExperiment()
@@ -387,22 +377,11 @@ if __name__ == "__main__":
     sourcedata = pathlib.Path("data", "sourcedata")
     sourcedata.mkdir(exist_ok=True, parents=True)
     filename = sourcedata / f"{p_num}_beh-{expInfo['date']}"
-    # an ExperimentHandler isn't essential but helps with data saving
-    thisExp = data.ExperimentHandler(
-        name=expInfo["expName"],
-        version="",
-        extraInfo=expInfo,
-        runtimeInfo=None,
-        originPath="C:\\Users\\richa\\GitHub\\task_motor_stopping\\experiment\\motor_stopping.py",
-        savePickle=True,
-        saveWideText=True,
-        dataFileName=(sourcedata / filename).as_posix(),
-        sortColumns="time",
-    )
     logFile = setupLogging(filename=filename)
     win = setupWindow(expInfo=expInfo)
-    # with open(filename.with_suffix(".csv"), "w") as dataFile:
-    #     run(win=win, dataFile=dataFile)
-    dataFile = open(filename.with_suffix(".csv"), "w")
-    run(thisExp=thisExp, win=win, dataFile=dataFile)
-    quit(thisExp=thisExp, win=win)
+    logging.flush()
+    with open(filename.with_suffix(".csv"), "w") as dataFile:
+        run(win=win, dataFile=dataFile)
+    print("Ending experiment normally.")
+    store_and_quit(win=win)
+    quit(win=win)
