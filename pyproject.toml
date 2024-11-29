@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Task for WP2 of ReTune B03 2nd funding period."
 readme = "README.md"
 requires-python = ">=3.8"
-dependencies = ["numpy>=1.24.4", "pynput>=1.7.4"]
+dependencies = ["numpy>=1.24.4"]
 
 [dependency-groups]
 dev = ["psychopy"]

@@ -19,6 +19,7 @@ from io import TextIOWrapper
 
 import numpy as np
 from psychopy import core, data, event, gui, logging, visual
+from psychopy.constants import FINISHED
 from psychopy.hardware import keyboard
 
 # logging.console.setLevel(logging.DEBUG)
@@ -94,7 +95,7 @@ def setupWindow(expInfo: dict[str, str]) -> visual.Window:
     return win
 
 
-def endExperiment(win: visual.Window | None = None):
+def endExperiment(thisExp: data.ExperimentHandler, win: visual.Window | None = None):
     """
     End this experiment, performing final shut down operations.
 
@@ -111,10 +112,12 @@ def endExperiment(win: visual.Window | None = None):
         # Flip one final time so any remaining win.callOnFlip()
         # and win.timeOnFlip() tasks get executed
         win.flip()
+        # mark experiment handler as finished
+    thisExp.status = FINISHED
     logging.flush()
 
 
-def quit(win: visual.Window | None = None):
+def quit(thisExp: data.ExperimentHandler, win: visual.Window | None = None):
     """
     Fully quit, closing the window and ending the Python process.
 
@@ -123,6 +126,7 @@ def quit(win: visual.Window | None = None):
     win : psychopy.visual.Window
         Window to close.
     """
+    thisExp.abort()  # or data files will save again on exit
     # make sure everything is closed down
     if win is not None:
         # Flip one final time so any remaining win.callOnFlip()
@@ -130,15 +134,7 @@ def quit(win: visual.Window | None = None):
         win.flip()
         win.close()
     logging.flush()
-    # terminate Python process
-
-    # sys.exit(0)
     core.quit()
-    # import os
-    # print("Sending kill signal")
-
-    # interrupt = signal.CTRL_C_EVENT if sys.platform == "win32" else signal.SIGINT
-    # os.kill(os.getpid(), interrupt)
 
 
 def draw_and_wait(
@@ -147,7 +143,7 @@ def draw_and_wait(
     message.draw()
     skip_with_space.draw(win)
     win.flip()
-    event.waitKeys()
+    event.waitKeys(keyList=["space"])
     event.clearEvents()
 
 
@@ -157,37 +153,32 @@ def draw_objects(objects):
 
 
 def return_and_delete_rand_idx(array, max_int):
-    idx = np.random.randint(max_int)
+    idx = np.random.randint(max_int)q
     x = array[idx]
     del array[idx]
     return x
 
 
-def store_and_quit(win):
+def store_and_quit(
+    thisExp: data.ExperimentHandler, win: visual.Window, dataFile: TextIOWrapper
+):
     dataFile.close()
-    endExperiment(win)
-    quit(win)
-
-    # dataFile.close()
-    # time.sleep(1)
-    # # event.getKeys()
-    # event.clearEvents()
-    # thisExp.status = FINISHED
-    # endExperiment(win)
-    # # print("Closing window")
-    # # win.close()
-    # thisExp.abort()
-    # print("Quitting")
-    # sys.exit(0)
-    # core.quit()
+    endExperiment(thisExp=thisExp, win=win)
+    quit(thisExp=thisExp, win=win)
 
 
-def run(win: visual.Window, dataFile: TextIOWrapper, thisExp) -> None:
+def run(
+    thisExp: data.ExperimentHandler, win: visual.Window, dataFile: TextIOWrapper
+) -> None:
     np.random.seed(41)  # Change seed in screening session
 
     kb = keyboard.KeyboardDevice(muteOutsidePsychopy=False)
 
-    kb.registerCallback(response="q", func=core.quit)
+    kb.registerCallback(
+        response="Esc",
+        func=store_and_quit,
+        kwargs={"win": win, "thisExp": thisExp, "dataFile": dataFile},
+    )
 
     skip_with_space = visual.TextStim(
         win=win,
@@ -308,6 +299,7 @@ def run(win: visual.Window, dataFile: TextIOWrapper, thisExp) -> None:
 
         # Pen has to get close to fixation cross
         while not np.sum(np.abs(mouse.getPos() - (0, cross_pos))) < 0.05:
+            kb.getKeys()
             cross.draw()
             win.flip()
 
@@ -315,7 +307,8 @@ def run(win: visual.Window, dataFile: TextIOWrapper, thisExp) -> None:
         cross.lineColor = "red"
 
         trial_time = core.Clock()
-        while trial_time.getTime() < 2.5:
+        while trial_time.getTime() < 1.2:
+            kb.getKeys()
             cross.draw()
             # Save mouse pos
             mouse_pos = mouse.getPos()
@@ -334,7 +327,6 @@ def run(win: visual.Window, dataFile: TextIOWrapper, thisExp) -> None:
             win.flip()
 
         trial_time.reset()
-        stopped = False
         while trial_time.getTime() < 2.3:
             # Draw objects and cross
             draw_objects(objects_trial)
@@ -357,11 +349,11 @@ def run(win: visual.Window, dataFile: TextIOWrapper, thisExp) -> None:
             )
 
             # Check whether movement has started to potentially trigger the stop signal
-            if trial_time.getTime() > 0.55 and stop_trials[trial] and not stopped:
-                stopped = True
+            if stop_trials[trial] and trial_time.getTime() > 0.55 and not stopped:
+                stopped = 1
                 win.color = "red"
-
             win.flip()
+
         win.color = "black"
 
         print(f"Trial no.: {trial}")
@@ -374,7 +366,7 @@ def run(win: visual.Window, dataFile: TextIOWrapper, thisExp) -> None:
 
     dataFile.close()
     print("Ending experiment normally.")
-    endExperiment(win)
+    endExperiment(thisExp=thisExp, win=win)
 
 
 if __name__ == "__main__":
@@ -400,5 +392,5 @@ if __name__ == "__main__":
     # with open(filename.with_suffix(".csv"), "w") as dataFile:
     #     run(win=win, dataFile=dataFile)
     dataFile = open(filename.with_suffix(".csv"), "w")
-    run(win=win, dataFile=dataFile, thisExp=thisExp)
-    quit(win=win)
+    run(thisExp=thisExp, win=win, dataFile=dataFile)
+    quit(thisExp=thisExp, win=win)
