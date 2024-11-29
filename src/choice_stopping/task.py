@@ -18,11 +18,13 @@ import pathlib
 from io import TextIOWrapper
 
 import numpy as np
+import psychopy
+from packaging.version import Version
 from psychopy import core, data, event, gui, logging, visual
 from psychopy.constants import FINISHED
 from psychopy.hardware import keyboard
 
-# logging.console.setLevel(logging.DEBUG)
+logging.console.setLevel(logging.INFO)
 
 
 def setupExperiment() -> dict[str, str]:
@@ -153,7 +155,7 @@ def draw_objects(objects):
 
 
 def return_and_delete_rand_idx(array, max_int):
-    idx = np.random.randint(max_int)q
+    idx = np.random.randint(max_int)
     x = array[idx]
     del array[idx]
     return x
@@ -172,13 +174,18 @@ def run(
 ) -> None:
     np.random.seed(41)  # Change seed in screening session
 
-    kb = keyboard.KeyboardDevice(muteOutsidePsychopy=False)
-
-    kb.registerCallback(
-        response="Esc",
-        func=store_and_quit,
-        kwargs={"win": win, "thisExp": thisExp, "dataFile": dataFile},
-    )
+    func_kwargs = {"win": win, "thisExp": thisExp, "dataFile": dataFile}
+    if Version(psychopy.__version__) >= Version("2024.3"):
+        print("Using new keyboard class")
+        kb = keyboard.KeyboardDevice(muteOutsidePsychopy=False)
+        kb.registerCallback(
+            response="Esc",
+            func=store_and_quit,
+            kwargs=func_kwargs,
+        )
+    else:
+        print("Using old keyboard class")
+        event.globalKeys.add(key="escape", func=store_and_quit, func_kwargs=func_kwargs)
 
     skip_with_space = visual.TextStim(
         win=win,
@@ -328,6 +335,7 @@ def run(
 
         trial_time.reset()
         while trial_time.getTime() < 2.3:
+            kb.getKeys()
             # Draw objects and cross
             draw_objects(objects_trial)
 
