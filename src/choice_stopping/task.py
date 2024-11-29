@@ -179,7 +179,7 @@ def run(
         print("Using new keyboard class")
         kb = keyboard.KeyboardDevice(muteOutsidePsychopy=False)
         kb.registerCallback(
-            response="Esc",
+            response="escape",
             func=store_and_quit,
             kwargs=func_kwargs,
         )
@@ -272,7 +272,7 @@ def run(
     # __________________________________________________________________
     # Loop over trials
 
-    for trial, condition in zip(range(n_trials), conditions, strict=True):
+    for trial, condition in zip(range(n_trials), conditions):
         # Target objects, make sure that the position varies from one trial to the next
         positions_tmp = positions.copy()
 
