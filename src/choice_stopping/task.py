@@ -25,6 +25,7 @@ from psychopy.constants import FINISHED
 from psychopy.hardware import keyboard
 
 logging.console.setLevel(logging.INFO)
+NEW_PSYCHOPY = Version(psychopy.__version__) >= Version("2024.3")
 
 
 def setupExperiment() -> dict[str, str]:
@@ -175,7 +176,7 @@ def run(
     np.random.seed(41)  # Change seed in screening session
 
     func_kwargs = {"win": win, "thisExp": thisExp, "dataFile": dataFile}
-    if Version(psychopy.__version__) >= Version("2024.3"):
+    if NEW_PSYCHOPY:
         print("Using new keyboard class")
         kb = keyboard.KeyboardDevice(muteOutsidePsychopy=False)
         kb.registerCallback(
@@ -306,7 +307,8 @@ def run(
 
         # Pen has to get close to fixation cross
         while not np.sum(np.abs(mouse.getPos() - (0, cross_pos))) < 0.05:
-            kb.getKeys()
+            if NEW_PSYCHOPY:
+                kb.getKeys()
             cross.draw()
             win.flip()
 
@@ -315,7 +317,8 @@ def run(
 
         trial_time = core.Clock()
         while trial_time.getTime() < 1.2:
-            kb.getKeys()
+            if NEW_PSYCHOPY:
+                kb.getKeys()
             cross.draw()
             # Save mouse pos
             mouse_pos = mouse.getPos()
@@ -335,7 +338,8 @@ def run(
 
         trial_time.reset()
         while trial_time.getTime() < 2.3:
-            kb.getKeys()
+            if NEW_PSYCHOPY:
+                kb.getKeys()
             # Draw objects and cross
             draw_objects(objects_trial)
 
