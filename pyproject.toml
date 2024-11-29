@@ -3,5 +3,11 @@ name = "choice-stopping"
 version = "0.1.0"
 description = "Task for WP2 of ReTune B03 2nd funding period."
 readme = "README.md"
-requires-python = ">=3.10"
-dependencies = ["numpy>=2.1.2", "psychopy>=2024.1.4"]
+requires-python = ">=3.8"
+dependencies = ["numpy>=1.24.4", "pynput>=1.7.4"]
+
+[dependency-groups]
+dev = ["psychopy"]
+
+[tool.uv.sources]
+psychopy = { git = "https://github.com/richardkoehler/psychopy", branch = "dev" }
