@@ -10,7 +10,7 @@ dependencies = ["numpy>=1.24.4"]
 dev = ["psychopy"]
 
 [tool.uv.sources]
-psychopy = { git = "https://github.com/richardkoehler/psychopy", branch = "dev" }
+psychopy = { git = "https://github.com/richardkoehler/psychopy", branch = "task-choice-stopping" }
 
 [[tool.mypy.overrides]]
 ignore_missing_imports = true
