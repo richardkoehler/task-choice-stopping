@@ -12,9 +12,6 @@ dev = ["psychopy"]
 [tool.uv.sources]
 psychopy = { git = "https://github.com/richardkoehler/psychopy", branch = "task-choice-stopping" }
 
-[tool.uv.workspace]
-members = ["analysis"]
-
 [[tool.mypy.overrides]]
 ignore_missing_imports = true
 module = ["numpy", "psychopy.*"]
