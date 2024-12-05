@@ -24,11 +24,20 @@ is_exiting = False
 def setupExperiment() -> dict[str, str]:
     # __________________________________________________________________
     # Get input from participant and prepare data file to store behavioural results
-    expName = "choice-stopping"
-    expInfo = {"participant": "Use the same UNIQUE ID everywhere"}
+    expName = "ChoiceStopping"
+    expInfo = {
+        "Subject": "Use the same UNIQUE ID everywhere",
+        "Medication": "Off/On",
+        "SessionNumber": "01",
+        "Hand": "R/L",
+        "Stimulation": "Off",
+        "Run": "1",
+    }
     dlg = gui.DlgFromDict(dictionary=expInfo, sortKeys=False, title=expName)
     if not dlg.OK:
         core.quit()
+    expInfo["Medication"] = expInfo["Medication"].replace("/", "")
+    expInfo["Hand"] = expInfo["Hand"].replace("/", "")
     expInfo["date"] = data.getDateStr(format="%Y-%m-%dT%Hh%M.%S.%f")
     expInfo["expName"] = expName
     return expInfo
@@ -55,7 +64,7 @@ def setupLogging(filename: pathlib.Path):
     return logFile
 
 
-def setupWindow(expInfo: dict[str, str]) -> visual.Window:
+def setupWindow() -> visual.Window:
     """
     Setup the window for the experiment.
 
@@ -83,8 +92,6 @@ def setupWindow(expInfo: dict[str, str]) -> visual.Window:
         useFBO=True,
         units="height",
     )
-    # store frame rate of monitor if we can measure it
-    expInfo["frameRate"] = win.getActualFrameRate()
     return win
 
 
@@ -369,22 +376,26 @@ def run(win: visual.Window, dataFile: TextIOWrapper) -> None:
 
 if __name__ == "__main__":
     expInfo = setupExperiment()
-    p_num = expInfo["participant"]
     sourcedata = pathlib.Path("data", "sourcedata")
     sourcedata.mkdir(exist_ok=True, parents=True)
-    filename = sourcedata / f"{p_num}_beh-{expInfo['date']}"
+    basename = "_".join(
+        (
+            f"sub-{expInfo['Subject']}",
+            f"ses-Med{expInfo['Medication']}{expInfo['SessionNumber']}",
+            f"task-{expInfo['expName']}{expInfo['Hand']}",
+            f"acq-Stim{expInfo['Stimulation']}",
+            f"run-{expInfo['Run']}",
+            f"beh-{expInfo['date']}",
+        )
+    )
+    filename = sourcedata / basename
     logFile = setupLogging(filename=filename)
-    win = setupWindow(expInfo=expInfo)
-    logging.flush()
+    win = setupWindow()
     with open(filename.with_suffix(".csv"), "w") as dataFile:
-        TESTING = True
-        if TESTING:
+        try:
             run(win=win, dataFile=dataFile)
+        except Exception as e:
+            logging.error(f"An unexpected error occurred: {e}")
+            raise e
+        finally:
             store_and_quit(win=win)
-        else:
-            try:
-                run(win=win, dataFile=dataFile)
-            except Exception as e:
-                logging.error(f"An unexpected error occurred: {e}")
-            finally:
-                store_and_quit(win=win)
