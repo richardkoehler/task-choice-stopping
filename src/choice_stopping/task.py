@@ -233,15 +233,21 @@ def run(win: visual.Window, dataFile: TextIOWrapper) -> None:
     )
     draw_and_wait(start_with_space, welcome_message, win)
 
-    dataFile.write(
-        "Trial,Condition,StopTrial,TargetsDisplayed,Stopped,RectVisited,TrialTime,Position_X,Position_Y\n"
-    )
+    header = "Trial,Condition,StopTrial,TargetsDisplayed,Stopped,RectVisited,TrialTime,Position_X,Position_Y\n"
+    format_str = "%i,%i,%i,%i,%i,%i,%.5f,%.5f,%.5f\n"
+    header_len = len(header.split(","))
+    format_len = len(format_str.split(","))
+    if not header_len == format_len:
+        raise ValueError(
+            f"Header has {header_len} columns. Format string has {format_len} columns."
+        )
+    dataFile.write(header)
     # __________________________________________________________________
     # Loop over trials
     break_message = visual.TextStim(win=win, text="Pause", color="white", height=0.07)
     trial_time = core.Clock()
     for trial, condition in zip(np.arange(n_trials), conditions):
-        if trial > 1 and not trial % trials_per_block:
+        if trial > 1 and not trial % 30:
             draw_and_wait(continue_with_space, break_message, win)
 
         print(f"Trial no.: {trial+1}/{n_trials}")
@@ -282,31 +288,35 @@ def run(win: visual.Window, dataFile: TextIOWrapper) -> None:
         cross.lineColor = "red"
 
         trial_time.reset()
-        while trial_time.getTime() < 1.2:
+        while time_elapsed := trial_time.getTime() < 1.2:
             if HAS_KB_CALLBACK:
                 kb.getKeys()
             cross.draw()
-            # Save mouse pos
+            # Save data
             mouse_pos = mouse.getPos()
-            dataFile.write(  # Trial,Targets,Condition,Stop,Time,Position_X,Position_Y
-                "%i,%i,%i,%i,%i,%i,%.5f,%.5f,%.5f\n"
-                % (
-                    trial,
-                    condition,
-                    stop_trial,
-                    0,
-                    stopped,
-                    obj_visited,
-                    trial_time.getTime(),
-                    mouse_pos[0],
-                    mouse_pos[1],
+            data_to_write = (
+                trial,
+                condition,
+                stop_trial,
+                0,
+                stopped,
+                obj_visited,
+                time_elapsed,
+                mouse_pos[0],
+                mouse_pos[1],
+            )
+            if not len(data_to_write) == header_len:
+                raise ValueError(
+                    f"Data to write has {len(data_to_write)} columns. Expected {header_len}."
                 )
+            dataFile.write(  # Trial,Condition,StopTrial,TargetsDisplayed,Stopped,RectVisited,TrialTime,Position_X,Position_Y
+                format_str % data_to_write
             )
             win.flip()
 
         is_moving = False
         trial_time.reset()
-        timer_on_end = core.CountdownTimer(1.0)  # 300 ms
+        timer_on_end = core.CountdownTimer(1.0)
         while not end_trial or timer_on_end.getTime() > 0:
             # Draw rectangles and cross
             for obj in objects_trial:
@@ -322,32 +332,35 @@ def run(win: visual.Window, dataFile: TextIOWrapper) -> None:
                 stopped = 1
                 timer_on_end.reset()
 
-            # Für jedes Viereck den Abstand zum Mauszeiger prüfen
-            if not end_trial:
+            # Check the distance of the mouse from each object
+            if not obj_visited:
                 for obj in objects_trial:
                     if isinstance(obj, visual.Rect):
                         dist = np.sum(np.abs(mouse_pos - obj.pos))
                         if dist < threshold_mov:
                             obj.fillColor = "red"
                             obj_visited = 1
-                            timer_on_end.reset()
+                            if not end_trial:
+                                timer_on_end.reset()
             end_trial = stopped or obj_visited
-
             # Save data
-            dataFile.write(  # Trial,Targets,Condition,Stop,Time,Position_X,Position_Y
-                "%i,%i,%i,%i,%i,%i,%i,%.5f,%.5f,%.5f\n"
-                % (
-                    trial,
-                    condition,
-                    stop_trial,
-                    1,
-                    stopped,
-                    obj_visited,
-                    is_moving,
-                    time_elapsed,
-                    mouse_pos[0],
-                    mouse_pos[1],
+            data_to_write = (
+                trial,
+                condition,
+                stop_trial,
+                1,
+                stopped,
+                obj_visited,
+                time_elapsed,
+                mouse_pos[0],
+                mouse_pos[1],
+            )
+            if not len(data_to_write) == header_len:
+                raise ValueError(
+                    f"Data to write has {len(data_to_write)} columns. Expected {header_len}."
                 )
+            dataFile.write(  # Trial,Condition,StopTrial,TargetsDisplayed,Stopped,RectVisited,TrialTime,Position_X,Position_Y
+                format_str % data_to_write
             )
             if HAS_KB_CALLBACK:
                 kb.getKeys()
