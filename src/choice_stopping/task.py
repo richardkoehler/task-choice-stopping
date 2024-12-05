@@ -38,7 +38,7 @@ def setupExperiment() -> dict[str, str]:
         core.quit()
     expInfo["Medication"] = expInfo["Medication"].replace("/", "")
     expInfo["Hand"] = expInfo["Hand"].replace("/", "")
-    expInfo["date"] = data.getDateStr(format="%Y-%m-%dT%Hh%M.%S.%f")
+    expInfo["date"] = data.getDateStr(format="%Y%m%dT%H%M%S.%f")
     expInfo["expName"] = expName
     return expInfo
 
