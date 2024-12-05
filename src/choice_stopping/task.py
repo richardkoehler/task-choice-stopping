@@ -365,7 +365,8 @@ def run(win: visual.Window, dataFile: TextIOWrapper) -> None:
 
 if __name__ == "__main__":
     expInfo = setupExperiment()
-    sourcedata = pathlib.Path("data", "sourcedata")
+    root_dir = pathlib.Path(__file__).parents[2]
+    sourcedata = pathlib.Path(root_dir, "data", "sourcedata")
     sourcedata.mkdir(exist_ok=True, parents=True)
     basename = "_".join(
         (
