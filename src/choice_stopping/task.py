@@ -68,11 +68,6 @@ def setupWindow() -> visual.Window:
     """
     Setup the window for the experiment.
 
-    Parameters
-    ==========
-    expInfo : dict
-        Dictionary of experiment information.
-
     Returns
     ==========
     psychopy.visual.Window
@@ -112,13 +107,6 @@ def draw_and_wait(
         time.sleep(0.1)
 
 
-def return_and_delete_rand_idx(array: list, high: int):
-    idx = np.random.randint(high)
-    x = array[idx]
-    del array[idx]
-    return x
-
-
 def store_and_quit(win: visual.Window):
     global is_exiting
     if is_exiting:
@@ -138,7 +126,6 @@ def store_and_quit(win: visual.Window):
 
 
 def run(win: visual.Window, dataFile: TextIOWrapper) -> None:
-    func_kwargs = {"win": win}
     if HAS_KB_CALLBACK:
         kb = keyboard.KeyboardDevice(muteOutsidePsychopy=False)
         kb.start()
@@ -146,11 +133,13 @@ def run(win: visual.Window, dataFile: TextIOWrapper) -> None:
         kb.registerCallback(
             response="escape",
             func=store_and_quit,
-            kwargs=func_kwargs,
+            kwargs={"win": win},
         )
     else:
         print("Using old keyboard class")
-        event.globalKeys.add(key="escape", func=store_and_quit, func_kwargs=func_kwargs)
+        event.globalKeys.add(
+            key="escape", func=store_and_quit, func_kwargs={"win": win}
+        )
 
     start_with_space = visual.TextStim(
         win=win,
@@ -178,7 +167,7 @@ def run(win: visual.Window, dataFile: TextIOWrapper) -> None:
         win=win, text="Keine \nBewegung", color="lime", height=0.05, bold=True
     )
 
-    threshold = 0.1
+    threshold_mov = 0.1
 
     # Fixation cross
     cross_pos = -0.4
@@ -283,7 +272,7 @@ def run(win: visual.Window, dataFile: TextIOWrapper) -> None:
         end_trial = 0
 
         # Pen has to get close to fixation cross
-        while not np.sum(np.abs(mouse.getPos() - (0, cross_pos))) < 0.1:
+        while not np.sum(np.abs(mouse.getPos() - (0, cross_pos))) < threshold_mov:
             if HAS_KB_CALLBACK:
                 kb.getKeys()
             cross.draw()
@@ -327,7 +316,7 @@ def run(win: visual.Window, dataFile: TextIOWrapper) -> None:
             mouse_pos = mouse.getPos()
 
             # Check whether movement has started to potentially trigger the stop signal
-            is_moving = np.sum(np.abs(mouse_pos - (0, cross_pos))) > 0.1
+            is_moving = np.sum(np.abs(mouse_pos - (0, cross_pos))) > threshold_mov
             if stop_trial and not end_trial and is_moving:
                 win.color = "red"
                 stopped = 1
@@ -338,7 +327,7 @@ def run(win: visual.Window, dataFile: TextIOWrapper) -> None:
                 for obj in objects_trial:
                     if isinstance(obj, visual.Rect):
                         dist = np.sum(np.abs(mouse_pos - obj.pos))
-                        if dist < threshold:
+                        if dist < threshold_mov:
                             obj.fillColor = "red"
                             obj_visited = 1
                             timer_on_end.reset()
