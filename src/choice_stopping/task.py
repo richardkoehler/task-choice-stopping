@@ -112,7 +112,8 @@ def store_and_quit(win: visual.Window):
     if is_exiting:
         return
     is_exiting = True
-    win.color = "black"
+    win.color = "black"  # Changing window color takes 2 flips
+    win.flip()
     message = visual.TextStim(
         win=win, text="Ende - Vielen Dank!", color="white", height=0.07
     )
@@ -237,18 +238,28 @@ def run(win: visual.Window, dataFile: TextIOWrapper, objFile: BufferedWriter) ->
     )
     draw_and_wait(start_with_space, welcome_message, win)
 
-    header = "Trial,Condition,StopTrial,TargetsDisplayed,Stopped,RectVisited,TrialTime,Position_X,Position_Y\n"
-    format_str = "%i,%i,%i,%i,%i,%i,%f,%f,%f\n"
-    header_len = len(header.split(","))
-    format_len = len(format_str.split(","))
-    if not header_len == format_len:
-        raise ValueError(
-            f"Header has {header_len} columns. Format string has {format_len} columns."
-        )
+    header_items = {
+        "Trial": "%i",
+        "Condition": "%i",
+        "StopTrial": "%i",
+        "TargetsDisplayed": "%i",
+        "IsMoving": "%i",
+        "Stopped": "%i",
+        "RectVisited": "%i",
+        "EndTrial": "%i",
+        "TrialTime": "%f",
+        "TotalTime": "%f",
+        "Position_X": "%f",
+        "Position_Y\n": "%f\n",
+    }
+    header = (",").join(header_items.keys())
+    header_len = len(header_items)
+    format_str = (",").join(header_items.values())
     dataFile.write(header)
     # __________________________________________________________________
     # Loop over trials
     break_message = visual.TextStim(win=win, text="Pause", color="white", height=0.07)
+    total_time = core.Clock()
     trial_time = core.Clock()
     for trial, condition in zip(np.arange(n_trials), conditions):
         if trial > 1 and not trial % 30:
@@ -294,20 +305,26 @@ def run(win: visual.Window, dataFile: TextIOWrapper, objFile: BufferedWriter) ->
         cross.lineColor = "red"
 
         trial_time.reset()
-        while time_elapsed := trial_time.getTime() < 1.2:
+        targets_displayed = 0
+        # Now wait for 1.2 seconds before displaying targets
+        while (time_elapsed := trial_time.getTime()) < 1.2:
             if HAS_KB_CALLBACK:
                 kb.getKeys()
             cross.draw()
             # Save data
             mouse_pos = mouse.getPos()
+            is_moving = np.sum(np.abs(mouse_pos - cross_pos)) > threshold_mov
             data_to_write = (
                 trial,
                 condition,
                 stop_trial,
-                0,  # Targets displayed
+                targets_displayed,
+                is_moving,
                 stopped,
                 obj_visited,
+                end_trial,
                 time_elapsed,
+                total_time.getTime(),
                 mouse_pos[0],
                 mouse_pos[1],
             )
@@ -321,8 +338,10 @@ def run(win: visual.Window, dataFile: TextIOWrapper, objFile: BufferedWriter) ->
         is_moving = False
         trial_time.reset()
         timer_on_end = core.CountdownTimer(1.0)
+        # Now display the targets
+        targets_displayed = 1
         while not end_trial or timer_on_end.getTime() > 0:
-            # Draw rectangles and cross
+            # Draw targets (rectangles and cross)
             for obj in objects_trial:
                 obj.draw()
             win.flip()
@@ -341,15 +360,21 @@ def run(win: visual.Window, dataFile: TextIOWrapper, objFile: BufferedWriter) ->
                             obj.fillColor = "red"
                             timer_on_end.reset()
 
+            # Check whether movement has started to potentially trigger the stop signal
+            is_moving = np.sum(np.abs(mouse_pos - cross_pos)) > threshold_mov
+
             # Save data before checking for stop signal, to account for delay in win.flip
             data_to_write = (
                 trial,
                 condition,
                 stop_trial,
-                1,  # Targets displayed
+                targets_displayed,
+                is_moving,
                 stopped,
                 obj_visited,
+                end_trial,
                 time_elapsed,
+                total_time.getTime(),
                 mouse_pos[0],
                 mouse_pos[1],
             )
@@ -359,10 +384,9 @@ def run(win: visual.Window, dataFile: TextIOWrapper, objFile: BufferedWriter) ->
                 )
             dataFile.write(format_str % data_to_write)
 
-            # Check whether movement has started to potentially trigger the stop signal
-            is_moving = np.sum(np.abs(mouse_pos - cross_pos)) > threshold_mov
             if stop_trial and not end_trial and is_moving:
-                win.color = "red"
+                win.color = "red"  # Changing window color takes 2 flips
+                win.flip()
                 stopped = 1
                 timer_on_end.reset()
             end_trial = stopped or obj_visited
@@ -371,7 +395,8 @@ def run(win: visual.Window, dataFile: TextIOWrapper, objFile: BufferedWriter) ->
             if condition > 1 and not end_trial and not is_moving and time_elapsed > 2.3:
                 break
         if stopped:  # reset window color
-            win.color = "black"
+            win.color = "black"  # Changing window color takes 2 flips
+            win.flip()
         elif obj_visited:  # reset original rectangle colors
             for color, rect in zip(colors, rectangles):
                 rect.fillColor = color
