@@ -7,7 +7,7 @@ from __future__ import absolute_import, annotations, division
 
 import pathlib
 import time
-from io import TextIOWrapper
+from io import BufferedWriter, TextIOWrapper
 
 import numpy as np
 import psychopy
@@ -112,6 +112,7 @@ def store_and_quit(win: visual.Window):
     if is_exiting:
         return
     is_exiting = True
+    win.color = "black"
     message = visual.TextStim(
         win=win, text="Ende - Vielen Dank!", color="white", height=0.07
     )
@@ -125,7 +126,7 @@ def store_and_quit(win: visual.Window):
     core.quit()
 
 
-def run(win: visual.Window, dataFile: TextIOWrapper) -> None:
+def run(win: visual.Window, dataFile: TextIOWrapper, objFile: BufferedWriter) -> None:
     if HAS_KB_CALLBACK:
         kb = keyboard.KeyboardDevice(muteOutsidePsychopy=False)
         kb.start()
@@ -170,18 +171,20 @@ def run(win: visual.Window, dataFile: TextIOWrapper) -> None:
     threshold_mov = 0.1
 
     # Fixation cross
-    cross_pos = -0.4
+    cross_pos_x = 0
+    cross_pos_y = -0.4
+    cross_pos = (cross_pos_x, cross_pos_y)
     cross_size = 0.1
     cross = visual.ShapeStim(
         win=win,
         lineColor="gray",
         lineWidth=8,
         vertices=(
-            (0, cross_pos - cross_size),
-            (0, cross_pos + cross_size),
-            (0, cross_pos),
-            (-cross_size, cross_pos),
-            (cross_size, cross_pos),
+            (cross_pos_x, cross_pos_y - cross_size),
+            (cross_pos_x, cross_pos_y + cross_size),
+            (cross_pos_x, cross_pos_y),
+            (-cross_size, cross_pos_y),
+            (cross_size, cross_pos_y),
         ),
         closeShape=False,
     )
@@ -196,6 +199,7 @@ def run(win: visual.Window, dataFile: TextIOWrapper) -> None:
         if p_y > -0.35:
             positions.append((p_x, p_y))
     n_pos = len(positions)  # Get final number of positions
+    positions = np.array(positions)
 
     # Define experimental design parameters
     trials_per_block = 45
@@ -234,7 +238,7 @@ def run(win: visual.Window, dataFile: TextIOWrapper) -> None:
     draw_and_wait(start_with_space, welcome_message, win)
 
     header = "Trial,Condition,StopTrial,TargetsDisplayed,Stopped,RectVisited,TrialTime,Position_X,Position_Y\n"
-    format_str = "%i,%i,%i,%i,%i,%i,%.5f,%.5f,%.5f\n"
+    format_str = "%i,%i,%i,%i,%i,%i,%f,%f,%f\n"
     header_len = len(header.split(","))
     format_len = len(format_str.split(","))
     if not header_len == format_len:
@@ -267,8 +271,10 @@ def run(win: visual.Window, dataFile: TextIOWrapper) -> None:
 
         # Choose a random position for every object
         ids_pos = rng.choice(n_pos, len(objects_trial), replace=False)
-        for object, id in zip(objects_trial, ids_pos):
-            object.pos = positions[id]
+        trial_positions = positions[ids_pos]
+        for obj, pos in zip(objects_trial, trial_positions):
+            obj.pos = pos
+        np.save(objFile, trial_positions)
 
         # Reset variables
         cross.lineColor = "white"
@@ -278,7 +284,7 @@ def run(win: visual.Window, dataFile: TextIOWrapper) -> None:
         end_trial = 0
 
         # Pen has to get close to fixation cross
-        while not np.sum(np.abs(mouse.getPos() - (0, cross_pos))) < threshold_mov:
+        while not np.sum(np.abs(mouse.getPos() - cross_pos)) < threshold_mov:
             if HAS_KB_CALLBACK:
                 kb.getKeys()
             cross.draw()
@@ -298,7 +304,7 @@ def run(win: visual.Window, dataFile: TextIOWrapper) -> None:
                 trial,
                 condition,
                 stop_trial,
-                0,
+                0,  # Targets displayed
                 stopped,
                 obj_visited,
                 time_elapsed,
@@ -309,9 +315,7 @@ def run(win: visual.Window, dataFile: TextIOWrapper) -> None:
                 raise ValueError(
                     f"Data to write has {len(data_to_write)} columns. Expected {header_len}."
                 )
-            dataFile.write(  # Trial,Condition,StopTrial,TargetsDisplayed,Stopped,RectVisited,TrialTime,Position_X,Position_Y
-                format_str % data_to_write
-            )
+            dataFile.write(format_str % data_to_write)
             win.flip()
 
         is_moving = False
@@ -325,30 +329,24 @@ def run(win: visual.Window, dataFile: TextIOWrapper) -> None:
             time_elapsed = trial_time.getTime()
             mouse_pos = mouse.getPos()
 
-            # Check whether movement has started to potentially trigger the stop signal
-            is_moving = np.sum(np.abs(mouse_pos - (0, cross_pos))) > threshold_mov
-            if stop_trial and not end_trial and is_moving:
-                win.color = "red"
-                stopped = 1
-                timer_on_end.reset()
-
             # Check the distance of the mouse from each object
             if not obj_visited:
                 for obj in objects_trial:
-                    if isinstance(obj, visual.Rect):
-                        dist = np.sum(np.abs(mouse_pos - obj.pos))
-                        if dist < threshold_mov:
+                    if not isinstance(obj, visual.Rect):
+                        continue
+                    dist = np.sum(np.abs(mouse_pos - obj.pos))
+                    if dist < threshold_mov:
+                        obj_visited = 1
+                        if not end_trial:
                             obj.fillColor = "red"
-                            obj_visited = 1
-                            if not end_trial:
-                                timer_on_end.reset()
-            end_trial = stopped or obj_visited
-            # Save data
+                            timer_on_end.reset()
+
+            # Save data before checking for stop signal, to account for delay in win.flip
             data_to_write = (
                 trial,
                 condition,
                 stop_trial,
-                1,
+                1,  # Targets displayed
                 stopped,
                 obj_visited,
                 time_elapsed,
@@ -359,19 +357,25 @@ def run(win: visual.Window, dataFile: TextIOWrapper) -> None:
                 raise ValueError(
                     f"Data to write has {len(data_to_write)} columns. Expected {header_len}."
                 )
-            dataFile.write(  # Trial,Condition,StopTrial,TargetsDisplayed,Stopped,RectVisited,TrialTime,Position_X,Position_Y
-                format_str % data_to_write
-            )
+            dataFile.write(format_str % data_to_write)
+
+            # Check whether movement has started to potentially trigger the stop signal
+            is_moving = np.sum(np.abs(mouse_pos - cross_pos)) > threshold_mov
+            if stop_trial and not end_trial and is_moving:
+                win.color = "red"
+                stopped = 1
+                timer_on_end.reset()
+            end_trial = stopped or obj_visited
             if HAS_KB_CALLBACK:
                 kb.getKeys()
             if condition > 1 and not end_trial and not is_moving and time_elapsed > 2.3:
                 break
-        win.flip()
         if stopped:  # reset window color
             win.color = "black"
         elif obj_visited:  # reset original rectangle colors
             for color, rect in zip(colors, rectangles):
                 rect.fillColor = color
+        win.flip()
 
     logging.log("Ending experiment normally.", level=logging.INFO)
 
@@ -394,11 +398,13 @@ if __name__ == "__main__":
     filename = sourcedata / basename
     logFile = setupLogging(filename=filename)
     win = setupWindow()
-    with open(filename.with_suffix(".csv"), "w") as dataFile:
+    with open(filename.with_suffix(".csv"), "w") as dataFile, open(
+        filename.with_suffix(".npy"), "wb"
+    ) as objFile:
         try:
-            run(win=win, dataFile=dataFile)
+            run(win=win, dataFile=dataFile, objFile=objFile)
         except Exception as e:
             logging.error(f"An unexpected error occurred: {e}")
-            raise e
+            raise
         finally:
             store_and_quit(win=win)
