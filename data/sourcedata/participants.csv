@@ -1,0 +1,2 @@
+participant_id,sex,handedness,age,disease_duration,PD_subtype,symptom_dominant_side,LEDD,tremor
+pilot01,female,right,60,19,equivalent,left,n/a,yes

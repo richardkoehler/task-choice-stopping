@@ -3,42 +3,42 @@
 # Pilot task
 # ########################################################
 
-# QUESTIONS TASK
-# How good should it be? Is reaction and movement time enough? Or should it be more reactive?
-# How to signal the stop?
-# Make the trial stop based on the movement
-# Instructions
-# __________________________________________________________________
-# Prepare environment
-
-# Import packages and functions
 from __future__ import absolute_import, annotations, division
 
 import pathlib
+import time
 from io import TextIOWrapper
 
 import numpy as np
 import psychopy
 from packaging.version import Version
 from psychopy import core, data, event, gui, logging, visual
-from psychopy.constants import FINISHED
 from psychopy.hardware import keyboard
 
-logging.console.setLevel(logging.INFO)
-NEW_PSYCHOPY = Version(psychopy.__version__) >= Version("2024.3")
+HAS_KB_CALLBACK = Version(psychopy.__version__) >= Version("2024.3")
+
+# Global variable to prevent multiple exiting
+is_exiting = False
 
 
 def setupExperiment() -> dict[str, str]:
     # __________________________________________________________________
     # Get input from participant and prepare data file to store behavioural results
-    expName = "SSCTT"
-    expInfo = {"participant": "Use the same UNIQUE ID everywhere"}
+    expName = "ChoiceStopping"
+    expInfo = {
+        "Subject": "Use the same UNIQUE ID everywhere",
+        "Medication": "Off/On",
+        "SessionNumber": "01",
+        "Hand": "R/L",
+        "Stimulation": "Off",
+        "Run": "1",
+    }
     dlg = gui.DlgFromDict(dictionary=expInfo, sortKeys=False, title=expName)
     if not dlg.OK:
         core.quit()
-    expInfo["date"] = data.getDateStr(
-        format="%Y-%m-%d %Hh%M.%S.%f %z", fractionalSecondDigits=6
-    )
+    expInfo["Medication"] = expInfo["Medication"].replace("/", "")
+    expInfo["Hand"] = expInfo["Hand"].replace("/", "")
+    expInfo["date"] = data.getDateStr(format="%Y%m%dT%H%M%S.%f")
     expInfo["expName"] = expName
     return expInfo
 
@@ -58,21 +58,15 @@ def setupLogging(filename: pathlib.Path):
         Text stream to receive inputs from the logging system.
     """
     # this outputs to the screen, not a file
-    logging.console.setLevel(logging.ERROR)
+    logging.console.setLevel(logging.WARNING)
     # save a log file for detail verbose info
     logFile = logging.LogFile(filename.with_suffix(".log"), level=logging.DEBUG)
-
     return logFile
 
 
-def setupWindow(expInfo: dict[str, str]) -> visual.Window:
+def setupWindow() -> visual.Window:
     """
     Setup the window for the experiment.
-
-    Parameters
-    ==========
-    expInfo : dict
-        Dictionary of experiment information.
 
     Returns
     ==========
@@ -80,117 +74,83 @@ def setupWindow(expInfo: dict[str, str]) -> visual.Window:
         Window to display stimuli in.
     """
     win = visual.Window(
-        size=(1920, 1200),
-        fullscr=False,
-        screen=3,
+        size=(1920, 1080),
+        fullscr=True,
+        screen=1,
         winType="pyglet",
         allowGUI=False,
         allowStencil=False,
-        monitor="testMonitor",
+        # monitor="testMonitor",
         color="black",
         colorSpace="rgb",
         blendMode="avg",
         useFBO=True,
         units="height",
     )
-    # store frame rate of monitor if we can measure it
-    expInfo["frameRate"] = win.getActualFrameRate()
     return win
 
 
-def endExperiment(thisExp: data.ExperimentHandler, win: visual.Window | None = None):
-    """
-    End this experiment, performing final shut down operations.
-
-    This function does NOT close the window or end the Python process - use `quit` for this.
-
-    Parameters
-    ==========
-    win : psychopy.visual.Window
-        Window for this experiment.
-    """
-    if win is not None:
-        # remove autodraw from all current components
-        win.clearAutoDraw()
-        # Flip one final time so any remaining win.callOnFlip()
-        # and win.timeOnFlip() tasks get executed
-        win.flip()
-        # mark experiment handler as finished
-    thisExp.status = FINISHED
-    logging.flush()
-
-
-def quit(thisExp: data.ExperimentHandler, win: visual.Window | None = None):
-    """
-    Fully quit, closing the window and ending the Python process.
-
-    Parameters
-    ==========
-    win : psychopy.visual.Window
-        Window to close.
-    """
-    thisExp.abort()  # or data files will save again on exit
-    # make sure everything is closed down
-    if win is not None:
-        # Flip one final time so any remaining win.callOnFlip()
-        # and win.timeOnFlip() tasks get executed before quitting
-        win.flip()
-        win.close()
-    logging.flush()
-    core.quit()
-
-
 def draw_and_wait(
-    skip_with_space: visual.TextStim, message: visual.TextStim, win: visual.Window
+    skip_with_space: visual.TextStim,
+    message: visual.TextStim,
+    win: visual.Window,
 ):
     message.draw()
     skip_with_space.draw(win)
     win.flip()
-    event.waitKeys(keyList=["space"])
-    event.clearEvents()
+    while True:
+        keys = event.getKeys()
+        if "space" in keys:
+            break
+        elif "escape" in keys:
+            store_and_quit(win=win)
+        time.sleep(0.1)
 
 
-def draw_objects(objects):
-    for object in objects:
-        object.draw()
+def store_and_quit(win: visual.Window):
+    global is_exiting
+    if is_exiting:
+        return
+    is_exiting = True
+    message = visual.TextStim(
+        win=win, text="Ende - Vielen Dank!", color="white", height=0.07
+    )
+    message.draw()
+    win.flip()
+    time.sleep(1)
+    win.clearAutoDraw()
+    win.flip()
+    win.close()
+    logging.flush()
+    core.quit()
 
 
-def return_and_delete_rand_idx(array, max_int):
-    idx = np.random.randint(max_int)
-    x = array[idx]
-    del array[idx]
-    return x
-
-
-def store_and_quit(
-    thisExp: data.ExperimentHandler, win: visual.Window, dataFile: TextIOWrapper
-):
-    dataFile.close()
-    endExperiment(thisExp=thisExp, win=win)
-    quit(thisExp=thisExp, win=win)
-
-
-def run(
-    thisExp: data.ExperimentHandler, win: visual.Window, dataFile: TextIOWrapper
-) -> None:
-    np.random.seed(41)  # Change seed in screening session
-
-    func_kwargs = {"win": win, "thisExp": thisExp, "dataFile": dataFile}
-    if NEW_PSYCHOPY:
-        print("Using new keyboard class")
+def run(win: visual.Window, dataFile: TextIOWrapper) -> None:
+    if HAS_KB_CALLBACK:
         kb = keyboard.KeyboardDevice(muteOutsidePsychopy=False)
+        kb.start()
+        kb.clearEvents()
         kb.registerCallback(
             response="escape",
             func=store_and_quit,
-            kwargs=func_kwargs,
+            kwargs={"win": win},
         )
     else:
         print("Using old keyboard class")
-        event.globalKeys.add(key="escape", func=store_and_quit, func_kwargs=func_kwargs)
+        event.globalKeys.add(
+            key="escape", func=store_and_quit, func_kwargs={"win": win}
+        )
 
-    skip_with_space = visual.TextStim(
+    start_with_space = visual.TextStim(
         win=win,
         text="Leertaste drücken um zu starten",
+        pos=(0.0, -0.25),
+        height=0.03,
+        color="white",
+    )
+    continue_with_space = visual.TextStim(
+        win=win,
+        text="Leertaste drücken um weiterzumachen",
         pos=(0.0, -0.25),
         height=0.03,
         color="white",
@@ -198,59 +158,62 @@ def run(
 
     # Define objects and parameters
     mouse = event.Mouse(visible=True)
-    # stop_text = 'STOP'
-    # stop_message = visual.TextStim(win=win, text=stop_text, color='white', height=0.1)
-
-    objects = [
-        visual.Rect(win=win, width=0.15, height=0.15, fillColor="aqua"),
-        visual.Rect(win=win, width=0.15, height=0.15, fillColor="yellow"),
-        visual.Rect(win=win, width=0.15, height=0.15, fillColor="fuchsia"),
-        visual.TextStim(
-            win=win, text="Keine \nBewegung", color="lime", height=0.05, bold=True
-        ),
+    colors = ["aqua", "yellow", "fuchsia"]
+    rectangles = [
+        visual.Rect(win=win, width=0.15, height=0.15, fillColor=color)
+        for color in colors
     ]
+    no_mov_text = visual.TextStim(
+        win=win, text="Keine \nBewegung", color="lime", height=0.05, bold=True
+    )
+
+    threshold_mov = 0.1
 
     # Fixation cross
     cross_pos = -0.4
+    cross_size = 0.1
     cross = visual.ShapeStim(
         win=win,
         lineColor="gray",
+        lineWidth=8,
         vertices=(
-            (0, cross_pos - 0.04),
-            (0, cross_pos + 0.04),
+            (0, cross_pos - cross_size),
+            (0, cross_pos + cross_size),
             (0, cross_pos),
-            (-0.04, cross_pos),
-            (0.04, cross_pos),
+            (-cross_size, cross_pos),
+            (cross_size, cross_pos),
         ),
         closeShape=False,
     )
 
     # Positions
     # Generate a list of equidistant target positions (from cross)
-    n_pos = 20
+    n_pos = 15
     positions = []
     for i in range(n_pos):
-        p_x = 0.7 * np.cos((2 * i * np.pi) / n_pos)
-        p_y = 0.7 * np.sin((2 * i * np.pi) / n_pos) - 0.4
+        p_x = 0.75 * np.cos((2 * i * np.pi) / n_pos)
+        p_y = 0.8 * np.sin((2 * i * np.pi) / n_pos) - 0.4
         if p_y > -0.35:
             positions.append((p_x, p_y))
-    n_pos = len(positions)
+    n_pos = len(positions)  # Get final number of positions
 
     # Define experimental design parameters
     trials_per_block = 45
-    n_blocks = 4
-    n_trials = trials_per_block * n_blocks  # 180 trials in total
+    blocks = np.array([0, 1, 2, 3])  # 4 different experimental conditions
+    n_blocks = len(blocks)
+    n_trials = trials_per_block * n_blocks  # 157 trials in total
 
     trials = np.arange(n_trials)
     # Shuffle the trials
-    np.random.shuffle(trials)
+    rng = np.random.default_rng(seed=30)
+    rng.shuffle(trials)
     # Generate the order of the conditions and the stop trials
-    conditions = np.repeat(np.arange(n_blocks), trials_per_block)
+    conditions = np.repeat(blocks, trials_per_block)
     # Shuffle the order of the conditions
     conditions = conditions[trials]
 
-    # Give a stop signal on 20 % of the trials
-    n_stop_trials = trials_per_block / 5
+    # Give a stop signal on 33 % of the trials
+    n_stop_trials = trials_per_block * 1 / 3
     if not n_stop_trials.is_integer():
         raise ValueError("Number of trials per block must be divisible by 5.")
     n_stop_trials = int(n_stop_trials)
@@ -259,55 +222,64 @@ def run(
         [[1] * n_stop_trials + [0] * n_go_trials] * n_blocks
     ).flatten()
     stop_trials = stop_trials[trials]
+    print(f"Number of stop trials = {stop_trials.sum()}")
 
     # __________________________________________________________________
     # Start experiment
 
     # Show welcome screen
-    welcome_text = "Willkommen zu unserer Untersuchung!"
-    message = visual.TextStim(win=win, text=welcome_text, color="white", height=0.07)
-    draw_and_wait(skip_with_space, message, win)
+    welcome_message = visual.TextStim(
+        win=win, text="Willkommen zu unserer Untersuchung!", color="white", height=0.07
+    )
+    draw_and_wait(start_with_space, welcome_message, win)
 
-    dataFile.write("Trial,Targets,Condition,Stop,Time,Position_X,Position_Y\n")
-
+    header = "Trial,Condition,StopTrial,TargetsDisplayed,Stopped,RectVisited,TrialTime,Position_X,Position_Y\n"
+    format_str = "%i,%i,%i,%i,%i,%i,%.5f,%.5f,%.5f\n"
+    header_len = len(header.split(","))
+    format_len = len(format_str.split(","))
+    if not header_len == format_len:
+        raise ValueError(
+            f"Header has {header_len} columns. Format string has {format_len} columns."
+        )
+    dataFile.write(header)
     # __________________________________________________________________
     # Loop over trials
+    break_message = visual.TextStim(win=win, text="Pause", color="white", height=0.07)
+    trial_time = core.Clock()
+    for trial, condition in zip(np.arange(n_trials), conditions):
+        if trial > 1 and not trial % 30:
+            draw_and_wait(continue_with_space, break_message, win)
 
-    for trial, condition in zip(range(n_trials), conditions):
+        print(f"Trial no.: {trial+1}/{n_trials}")
         # Target objects, make sure that the position varies from one trial to the next
-        positions_tmp = positions.copy()
+        ids = rng.choice(3, 3, replace=False)
+        objects_trial = [rectangles[ids[0]]]
+        if condition == 0:
+            objects_trial.append(rectangles[ids[1]])
+        elif condition == 1:
+            objects_trial.extend([rectangles[ids[1]], rectangles[ids[2]]])
+        elif condition == 2:
+            objects_trial.append(no_mov_text)
+        elif condition == 3:
+            objects_trial.extend([rectangles[ids[1]], no_mov_text])
+        else:
+            raise ValueError(f"Condition must be between 0 and 3. Got: {condition}.")
 
-        if condition <= 1:  # 2 & 3 choice
-            objects_trial = objects[:3]
-            # Choose a random position for every object
-            for object in objects_trial:
-                object.pos = return_and_delete_rand_idx(
-                    positions_tmp, len(positions_tmp)
-                )
-            # Delete random object if only 2 should be displayed
-            if condition == 0:
-                return_and_delete_rand_idx(objects_trial, 3)
-
-        elif condition > 1:  # no movement option
-            objects_trial = objects[:4]
-            # Drop one rectangle
-            return_and_delete_rand_idx(objects_trial, 3)
-            # Choose a random position for every object
-            for object in objects_trial:
-                object.pos = return_and_delete_rand_idx(
-                    positions_tmp, len(positions_tmp)
-                )
-            # If only 1 object, drop one
-            if condition == 3:
-                return_and_delete_rand_idx(objects_trial, 3)
+        # Choose a random position for every object
+        ids_pos = rng.choice(n_pos, len(objects_trial), replace=False)
+        for object, id in zip(objects_trial, ids_pos):
+            object.pos = positions[id]
 
         # Reset variables
         cross.lineColor = "white"
+        stop_trial = stop_trials[trial]
         stopped = 0
+        obj_visited = 0
+        end_trial = 0
 
         # Pen has to get close to fixation cross
-        while not np.sum(np.abs(mouse.getPos() - (0, cross_pos))) < 0.05:
-            if NEW_PSYCHOPY:
+        while not np.sum(np.abs(mouse.getPos() - (0, cross_pos))) < threshold_mov:
+            if HAS_KB_CALLBACK:
                 kb.getKeys()
             cross.draw()
             win.flip()
@@ -315,94 +287,118 @@ def run(
         # Change color of cross if pen is close enough
         cross.lineColor = "red"
 
-        trial_time = core.Clock()
-        while trial_time.getTime() < 1.2:
-            if NEW_PSYCHOPY:
+        trial_time.reset()
+        while time_elapsed := trial_time.getTime() < 1.2:
+            if HAS_KB_CALLBACK:
                 kb.getKeys()
             cross.draw()
-            # Save mouse pos
+            # Save data
             mouse_pos = mouse.getPos()
-            dataFile.write(
-                "%i,%i,%i,%i,%.5f %.5f,%.5f\n"
-                % (
-                    trial,
-                    0,
-                    condition,
-                    stopped,
-                    trial_time.getTime(),
-                    mouse_pos[0],
-                    mouse_pos[1],
+            data_to_write = (
+                trial,
+                condition,
+                stop_trial,
+                0,
+                stopped,
+                obj_visited,
+                time_elapsed,
+                mouse_pos[0],
+                mouse_pos[1],
+            )
+            if not len(data_to_write) == header_len:
+                raise ValueError(
+                    f"Data to write has {len(data_to_write)} columns. Expected {header_len}."
                 )
+            dataFile.write(  # Trial,Condition,StopTrial,TargetsDisplayed,Stopped,RectVisited,TrialTime,Position_X,Position_Y
+                format_str % data_to_write
             )
             win.flip()
 
+        is_moving = False
         trial_time.reset()
-        while trial_time.getTime() < 2.3:
-            if NEW_PSYCHOPY:
-                kb.getKeys()
-            # Draw objects and cross
-            draw_objects(objects_trial)
-
-            # Get mouse position
+        timer_on_end = core.CountdownTimer(1.0)
+        while not end_trial or timer_on_end.getTime() > 0:
+            # Draw rectangles and cross
+            for obj in objects_trial:
+                obj.draw()
+            win.flip()
+            time_elapsed = trial_time.getTime()
             mouse_pos = mouse.getPos()
-
-            # Save
-            dataFile.write(
-                "%i,%i %i,%i,%.5f,%.5f,%.5f\n"
-                % (
-                    trial,
-                    1,
-                    condition,
-                    stopped,
-                    trial_time.getTime(),
-                    mouse_pos[0],
-                    mouse_pos[1],
-                )
-            )
 
             # Check whether movement has started to potentially trigger the stop signal
-            if stop_trials[trial] and trial_time.getTime() > 0.55 and not stopped:
-                stopped = 1
+            is_moving = np.sum(np.abs(mouse_pos - (0, cross_pos))) > threshold_mov
+            if stop_trial and not end_trial and is_moving:
                 win.color = "red"
-            win.flip()
+                stopped = 1
+                timer_on_end.reset()
 
-        win.color = "black"
+            # Check the distance of the mouse from each object
+            if not obj_visited:
+                for obj in objects_trial:
+                    if isinstance(obj, visual.Rect):
+                        dist = np.sum(np.abs(mouse_pos - obj.pos))
+                        if dist < threshold_mov:
+                            obj.fillColor = "red"
+                            obj_visited = 1
+                            if not end_trial:
+                                timer_on_end.reset()
+            end_trial = stopped or obj_visited
+            # Save data
+            data_to_write = (
+                trial,
+                condition,
+                stop_trial,
+                1,
+                stopped,
+                obj_visited,
+                time_elapsed,
+                mouse_pos[0],
+                mouse_pos[1],
+            )
+            if not len(data_to_write) == header_len:
+                raise ValueError(
+                    f"Data to write has {len(data_to_write)} columns. Expected {header_len}."
+                )
+            dataFile.write(  # Trial,Condition,StopTrial,TargetsDisplayed,Stopped,RectVisited,TrialTime,Position_X,Position_Y
+                format_str % data_to_write
+            )
+            if HAS_KB_CALLBACK:
+                kb.getKeys()
+            if condition > 1 and not end_trial and not is_moving and time_elapsed > 2.3:
+                break
+        win.flip()
+        if stopped:  # reset window color
+            win.color = "black"
+        elif obj_visited:  # reset original rectangle colors
+            for color, rect in zip(colors, rectangles):
+                rect.fillColor = color
 
-        print(f"Trial no.: {trial}")
-
-    # Show welcome screen
-    end_text = "Ende - Vielen Dank!"
-    message = visual.TextStim(win=win, text=end_text, color="white", height=0.07)
-    message.draw()
-    win.flip()
-
-    dataFile.close()
-    print("Ending experiment normally.")
-    endExperiment(thisExp=thisExp, win=win)
+    logging.log("Ending experiment normally.", level=logging.INFO)
 
 
 if __name__ == "__main__":
     expInfo = setupExperiment()
-    p_num = expInfo["participant"]
-    sourcedata = pathlib.Path("data", "sourcedata")
+    root_dir = pathlib.Path(__file__).parents[2]
+    sourcedata = pathlib.Path(root_dir, "data", "sourcedata")
     sourcedata.mkdir(exist_ok=True, parents=True)
-    filename = sourcedata / f"{p_num}_beh-{expInfo['date']}"
-    # an ExperimentHandler isn't essential but helps with data saving
-    thisExp = data.ExperimentHandler(
-        name=expInfo["expName"],
-        version="",
-        extraInfo=expInfo,
-        runtimeInfo=None,
-        originPath="C:\\Users\\richa\\GitHub\\task_motor_stopping\\experiment\\motor_stopping.py",
-        savePickle=True,
-        saveWideText=True,
-        dataFileName=(sourcedata / filename).as_posix(),
-        sortColumns="time",
+    basename = "_".join(
+        (
+            f"sub-{expInfo['Subject']}",
+            f"ses-Med{expInfo['Medication']}{expInfo['SessionNumber']}",
+            f"task-{expInfo['expName']}{expInfo['Hand']}",
+            f"acq-Stim{expInfo['Stimulation']}",
+            f"run-{expInfo['Run']}",
+            f"beh-{expInfo['date']}",
+        )
     )
+    filename = sourcedata / basename
     logFile = setupLogging(filename=filename)
-    win = setupWindow(expInfo=expInfo)
-    # with open(filename.with_suffix(".csv"), "w") as dataFile:
-    #     run(win=win, dataFile=dataFile)
-    dataFile = open(filename.with_suffix(".csv"), "w")
-    run(thisExp=thisExp, win=win, dataFile=dataFile)
-    quit(thisExp=thisExp, win=win)
+    win = setupWindow()
+    with open(filename.with_suffix(".csv"), "w") as dataFile:
+        try:
+            run(win=win, dataFile=dataFile)
+        except Exception as e:
+            logging.error(f"An unexpected error occurred: {e}")
+            raise e
+        finally:
+            store_and_quit(win=win)
