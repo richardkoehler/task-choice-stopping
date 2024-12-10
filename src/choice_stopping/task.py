@@ -6,6 +6,7 @@
 from __future__ import absolute_import, annotations, division
 
 import pathlib
+import shutil
 import time
 from io import BufferedWriter, TextIOWrapper
 
@@ -38,7 +39,7 @@ def setupExperiment() -> dict[str, str]:
         core.quit()
     expInfo["Medication"] = expInfo["Medication"].replace("/", "")
     expInfo["Hand"] = expInfo["Hand"].replace("/", "")
-    expInfo["date"] = data.getDateStr(format="%Y%m%dT%H%M%S.%f")
+    expInfo["date"] = data.getDateStr(format="%Y%m%dT%H%M%S")
     expInfo["expName"] = expName
     return expInfo
 
@@ -157,12 +158,16 @@ def run(win: visual.Window, dataFile: TextIOWrapper, objFile: BufferedWriter) ->
         height=0.03,
         color="white",
     )
+    stop_text = visual.TextStim(
+        win=win, text="STOP", height=0.14, color="white", bold=True
+    )
 
     # Define objects and parameters
     mouse = event.Mouse(visible=True)
     colors = ["aqua", "yellow", "fuchsia"]
+    rect_size = 0.15
     rectangles = [
-        visual.Rect(win=win, width=0.15, height=0.15, fillColor=color)
+        visual.Rect(win=win, width=rect_size, height=rect_size, fillColor=color)
         for color in colors
     ]
     no_mov_text = visual.TextStim(
@@ -306,7 +311,7 @@ def run(win: visual.Window, dataFile: TextIOWrapper, objFile: BufferedWriter) ->
 
         trial_time.reset()
         targets_displayed = 0
-        # Now wait for 1.2 seconds before displaying targets
+        # Now wait for X seconds before displaying targets
         while (time_elapsed := trial_time.getTime()) < 1.2:
             if HAS_KB_CALLBACK:
                 kb.getKeys()
@@ -341,9 +346,12 @@ def run(win: visual.Window, dataFile: TextIOWrapper, objFile: BufferedWriter) ->
         # Now display the targets
         targets_displayed = 1
         while not end_trial or timer_on_end.getTime() > 0:
-            # Draw targets (rectangles and cross)
-            for obj in objects_trial:
-                obj.draw()
+            if not stopped:
+                # Draw targets (rectangles and cross)
+                for obj in objects_trial:
+                    obj.draw()
+            else:
+                stop_text.draw()
             win.flip()
             time_elapsed = trial_time.getTime()
             mouse_pos = mouse.getPos()
@@ -354,7 +362,7 @@ def run(win: visual.Window, dataFile: TextIOWrapper, objFile: BufferedWriter) ->
                     if not isinstance(obj, visual.Rect):
                         continue
                     dist = np.sum(np.abs(mouse_pos - obj.pos))
-                    if dist < threshold_mov:
+                    if dist < rect_size:
                         obj_visited = 1
                         if not end_trial:
                             obj.fillColor = "red"
@@ -385,7 +393,11 @@ def run(win: visual.Window, dataFile: TextIOWrapper, objFile: BufferedWriter) ->
             dataFile.write(format_str % data_to_write)
 
             if stop_trial and not end_trial and is_moving:
-                win.color = "red"  # Changing window color takes 2 flips
+                win.color = (
+                    1.6 - 1,
+                    0 * 2 - 1,
+                    0 * 2 - 1,
+                )  # "red"  # Changing window color takes 2 flips
                 win.flip()
                 stopped = 1
                 timer_on_end.reset()
@@ -420,11 +432,13 @@ if __name__ == "__main__":
             f"beh-{expInfo['date']}",
         )
     )
-    filename = sourcedata / basename
-    logFile = setupLogging(filename=filename)
+    sub_dir = sourcedata / basename
+    sub_dir.mkdir(exist_ok=True)
+    shutil.copy2(__file__, sub_dir)  # Save the state of this script
+    logFile = setupLogging(filename=sub_dir / "psychopy.log")
     win = setupWindow()
-    with open(filename.with_suffix(".csv"), "w") as dataFile, open(
-        filename.with_suffix(".npy"), "wb"
+    with open(sub_dir / "data.csv", "w") as dataFile, open(
+        sub_dir / "targets.npy", "wb"
     ) as objFile:
         try:
             run(win=win, dataFile=dataFile, objFile=objFile)
