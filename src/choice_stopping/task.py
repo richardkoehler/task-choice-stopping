@@ -159,8 +159,9 @@ def run(win: visual.Window, dataFile: TextIOWrapper, objFile: BufferedWriter) ->
         color="white",
     )
     stop_text = visual.TextStim(
-        win=win, text="STOP", height=0.14, color="white", bold=True
+        win=win, text="STOP", height=0.14, pos=(0.0, 0.15), color="white", bold=True
     )
+    stop_color_win = (0.8 * 2 - 1, -1, -1)  # "red"
 
     # Define objects and parameters
     mouse = event.Mouse(visible=True)
@@ -211,7 +212,7 @@ def run(win: visual.Window, dataFile: TextIOWrapper, objFile: BufferedWriter) ->
     trials_per_block = 45
     blocks = np.array([0, 1, 2, 3])  # 4 different experimental conditions
     n_blocks = len(blocks)
-    n_trials = trials_per_block * n_blocks  # 157 trials in total
+    n_trials = trials_per_block * n_blocks  # 180 trials in total
 
     trials = np.arange(n_trials)
     # Shuffle the trials
@@ -221,6 +222,12 @@ def run(win: visual.Window, dataFile: TextIOWrapper, objFile: BufferedWriter) ->
     conditions = np.repeat(blocks, trials_per_block)
     # Shuffle the order of the conditions
     conditions = conditions[trials]
+    # Create random jitter for the baseline where the cross is displayed
+    jitter = rng.uniform(low=-0.25, high=0.25, size=n_trials)
+    cross_durations = 1.2 + jitter  # 1.2 seconds + jitter
+    assert (
+        n_trials == conditions.size == cross_durations.size
+    ), "Size mismatch of arrays."
 
     # Give a stop signal on 33 % of the trials
     n_stop_trials = trials_per_block * 1 / 3
@@ -266,7 +273,9 @@ def run(win: visual.Window, dataFile: TextIOWrapper, objFile: BufferedWriter) ->
     break_message = visual.TextStim(win=win, text="Pause", color="white", height=0.07)
     total_time = core.Clock()
     trial_time = core.Clock()
-    for trial, condition in zip(np.arange(n_trials), conditions):
+    for trial, condition, cross_duration in zip(
+        np.arange(n_trials), conditions, cross_durations
+    ):
         if trial > 1 and not trial % 30:
             draw_and_wait(continue_with_space, break_message, win)
 
@@ -312,7 +321,7 @@ def run(win: visual.Window, dataFile: TextIOWrapper, objFile: BufferedWriter) ->
         trial_time.reset()
         targets_displayed = 0
         # Now wait for X seconds before displaying targets
-        while (time_elapsed := trial_time.getTime()) < 1.2:
+        while (time_elapsed := trial_time.getTime()) < cross_duration:
             if HAS_KB_CALLBACK:
                 kb.getKeys()
             cross.draw()
@@ -393,12 +402,8 @@ def run(win: visual.Window, dataFile: TextIOWrapper, objFile: BufferedWriter) ->
             dataFile.write(format_str % data_to_write)
 
             if stop_trial and not end_trial and is_moving:
-                win.color = (
-                    1.6 - 1,
-                    0 * 2 - 1,
-                    0 * 2 - 1,
-                )  # "red"  # Changing window color takes 2 flips
-                win.flip()
+                win.color = stop_color_win
+                win.flip()  # Changing window color takes 2 flips
                 stopped = 1
                 timer_on_end.reset()
             end_trial = stopped or obj_visited
