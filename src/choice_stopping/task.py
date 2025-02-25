@@ -3,7 +3,7 @@
 # Pilot task
 # ########################################################
 
-from __future__ import absolute_import, annotations, division
+from __future__ import annotations
 
 import pathlib
 import shutil
@@ -202,7 +202,7 @@ def run(win: visual.Window, dataFile: TextIOWrapper, objFile: BufferedWriter) ->
     positions = []
     for i in range(n_pos):
         p_x = 0.75 * np.cos((2 * i * np.pi) / n_pos)
-        p_y = 0.8 * np.sin((2 * i * np.pi) / n_pos) - 0.4
+        p_y = 0.75 * np.sin((2 * i * np.pi) / n_pos) - 0.4
         if p_y > -0.35:
             positions.append((p_x, p_y))
     n_pos = len(positions)  # Get final number of positions
@@ -225,9 +225,9 @@ def run(win: visual.Window, dataFile: TextIOWrapper, objFile: BufferedWriter) ->
     # Create random jitter for the baseline where the cross is displayed
     jitter = rng.uniform(low=-0.25, high=0.25, size=n_trials)
     cross_durations = 1.2 + jitter  # 1.2 seconds + jitter
-    assert (
-        n_trials == conditions.size == cross_durations.size
-    ), "Size mismatch of arrays."
+    assert n_trials == conditions.size == cross_durations.size, (
+        "Size mismatch of arrays."
+    )
 
     # Give a stop signal on 33 % of the trials
     n_stop_trials = trials_per_block * 1 / 3
@@ -279,7 +279,7 @@ def run(win: visual.Window, dataFile: TextIOWrapper, objFile: BufferedWriter) ->
         if trial > 1 and not trial % 30:
             draw_and_wait(continue_with_space, break_message, win)
 
-        print(f"Trial no.: {trial+1}/{n_trials}")
+        print(f"Trial no.: {trial + 1}/{n_trials}")
         # Target objects, make sure that the position varies from one trial to the next
         ids = rng.choice(3, 3, replace=False)
         objects_trial = [rectangles[ids[0]]]
@@ -442,9 +442,10 @@ if __name__ == "__main__":
     shutil.copy2(__file__, sub_dir)  # Save the state of this script
     logFile = setupLogging(filename=sub_dir / "psychopy.log")
     win = setupWindow()
-    with open(sub_dir / "data.csv", "w") as dataFile, open(
-        sub_dir / "targets.npy", "wb"
-    ) as objFile:
+    with (
+        open(sub_dir / "data.csv", "w") as dataFile,
+        open(sub_dir / "targets.npy", "wb") as objFile,
+    ):
         try:
             run(win=win, dataFile=dataFile, objFile=objFile)
         except Exception as e:
