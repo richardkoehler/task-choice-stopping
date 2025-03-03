@@ -219,7 +219,7 @@ def run(win: visual.Window, dataFile: TextIOWrapper, objFile: BufferedWriter) ->
     positions = []
     for i in range(n_pos):
         p_x = 0.75 * np.cos((2 * i * np.pi) / n_pos)
-        p_y = 0.8 * np.sin((2 * i * np.pi) / n_pos) - 0.4
+        p_y = 0.75 * np.sin((2 * i * np.pi) / n_pos) - 0.4
         if p_y > -0.35:
             positions.append((p_x, p_y))
     positions = np.array(positions)
@@ -293,10 +293,8 @@ def run(win: visual.Window, dataFile: TextIOWrapper, objFile: BufferedWriter) ->
         # ------------------------------------------------------------
         # Condition 0 => 2 Vierecke
         # Condition 1 => 4 Vierecke
-        # Condition 2 => 2 Vierecke + "Keine Bewegung" (Oval+Text)
+        # Condition 2 => 3 Vierecke + "Keine Bewegung" (Oval+Text)
         # Condition 3 => 1 Viereck  + "Keine Bewegung" (Oval+Text)
-        #
-        # => Wir überschreiten so nie 4 sichtbare Objekte
         # ------------------------------------------------------------
         objects_trial = []
 
@@ -317,7 +315,7 @@ def run(win: visual.Window, dataFile: TextIOWrapper, objFile: BufferedWriter) ->
             objects_trial = squares
 
         elif condition == 2:
-            # 2 Vierecke + Keine Bewegung => 4 Objekte gesamt
+            # 3 Vierecke + Keine Bewegung => 4 Objekte gesamt
             squares = pick_rects(2)
             pos_ids = rng.choice(n_pos, size=3, replace=False)  
             # => 2 Positionen für die Vierecke + 1 für Oval+Text
@@ -328,7 +326,7 @@ def run(win: visual.Window, dataFile: TextIOWrapper, objFile: BufferedWriter) ->
             objects_trial = squares + [no_mov_oval, no_mov_text]
 
         elif condition == 3:
-            # 1 Viereck + Keine Bewegung => 3 Objekte
+            # 1 Viereck + Keine Bewegung => 2 Objekte
             squares = pick_rects(1)
             pos_ids = rng.choice(n_pos, size=2, replace=False)  
             # => 1 Position für das Viereck + 1 für Oval+Text
