@@ -81,7 +81,6 @@ def setupWindow() -> visual.Window:
         winType="pyglet",
         allowGUI=False,
         allowStencil=False,
-        # monitor="testMonitor",
         color="black",
         colorSpace="rgb",
         blendMode="avg",
@@ -96,6 +95,7 @@ def draw_and_wait(
     message: visual.TextStim,
     win: visual.Window,
 ):
+    """Zeigt eine Nachricht und wartet auf SPACE oder ESC."""
     message.draw()
     skip_with_space.draw(win)
     win.flip()
@@ -109,6 +109,7 @@ def draw_and_wait(
 
 
 def store_and_quit(win: visual.Window):
+    """Sichere Daten und beende das Experiment."""
     global is_exiting
     if is_exiting:
         return
@@ -129,6 +130,8 @@ def store_and_quit(win: visual.Window):
 
 
 def run(win: visual.Window, dataFile: TextIOWrapper, objFile: BufferedWriter) -> None:
+    """Führt den Haupt-Durchlauf des Experiments aus."""
+    # ESC-Key abfangen
     if HAS_KB_CALLBACK:
         kb = keyboard.KeyboardDevice(muteOutsidePsychopy=False)
         kb.start()
@@ -163,73 +166,83 @@ def run(win: visual.Window, dataFile: TextIOWrapper, objFile: BufferedWriter) ->
     )
     stop_color_win = (0.8 * 2 - 1, -1, -1)  # "red"
 
-    # Define objects and parameters
     mouse = event.Mouse(visible=True)
-    colors = ["aqua", "yellow", "fuchsia"]
+
+    # Vier mögliche Farben (vier Rechtecke)
+    colors = ["aqua", "yellow", "fuchsia", "orange"]
     rect_size = 0.15
-    rectangles = [
-        visual.Rect(win=win, width=rect_size, height=rect_size, fillColor=color)
+    all_rects = [
+        visual.Rect(
+            win=win, width=rect_size, height=rect_size, fillColor=color, lineColor=None
+        )
         for color in colors
     ]
+
+    # "Keine Bewegung": Grünes Oval + Weißer Text
     no_mov_text = visual.TextStim(
-        win=win, text="Keine \nBewegung", color="lime", height=0.05, bold=True
+        win=win,
+        text="Keine Bewegung",
+        color="white",
+        height=0.04,
+        bold=True,
+    )
+    no_mov_oval = visual.ShapeStim(
+        win=win,
+        vertices="circle",
+        size=(0.4, 0.2),  # Oval genug, damit Text nicht überlappt
+        fillColor="lime",
+        lineColor="lime",
+        lineWidth=2,
     )
 
     threshold_mov = 0.1
 
-    # Fixation cross
-    cross_pos_x = 0
-    cross_pos_y = -0.4
-    cross_pos = (cross_pos_x, cross_pos_y)
+    # Fixationskreuz
+    cross_pos = (0, -0.4)
     cross_size = 0.1
     cross = visual.ShapeStim(
         win=win,
         lineColor="gray",
         lineWidth=8,
         vertices=(
-            (cross_pos_x, cross_pos_y - cross_size),
-            (cross_pos_x, cross_pos_y + cross_size),
-            (cross_pos_x, cross_pos_y),
-            (-cross_size, cross_pos_y),
-            (cross_size, cross_pos_y),
+            (cross_pos[0], cross_pos[1] - cross_size),
+            (cross_pos[0], cross_pos[1] + cross_size),
+            (cross_pos[0], cross_pos[1]),
+            (-cross_size, cross_pos[1]),
+            (cross_size, cross_pos[1]),
         ),
         closeShape=False,
     )
 
-    # Positions
-    # Generate a list of equidistant target positions (from cross)
+    # Positionen generieren (oberhalb von y>-0.35)
     n_pos = 15
     positions = []
     for i in range(n_pos):
         p_x = 0.75 * np.cos((2 * i * np.pi) / n_pos)
-        p_y = 0.75 * np.sin((2 * i * np.pi) / n_pos) - 0.4
+        p_y = 0.8 * np.sin((2 * i * np.pi) / n_pos) - 0.4
         if p_y > -0.35:
             positions.append((p_x, p_y))
-    n_pos = len(positions)  # Get final number of positions
     positions = np.array(positions)
+    n_pos = len(positions)
 
-    # Define experimental design parameters
+    # Experimental Design
     trials_per_block = 45
-    blocks = np.array([0, 1, 2, 3])  # 4 different experimental conditions
+    blocks = np.array([0, 1, 2, 3])  # 4 conditions
     n_blocks = len(blocks)
-    n_trials = trials_per_block * n_blocks  # 180 trials in total
+    n_trials = trials_per_block * n_blocks
 
-    trials = np.arange(n_trials)
-    # Shuffle the trials
     rng = np.random.default_rng(seed=30)
-    rng.shuffle(trials)
-    # Generate the order of the conditions and the stop trials
-    conditions = np.repeat(blocks, trials_per_block)
-    # Shuffle the order of the conditions
-    conditions = conditions[trials]
-    # Create random jitter for the baseline where the cross is displayed
-    jitter = rng.uniform(low=-0.25, high=0.25, size=n_trials)
-    cross_durations = 1.2 + jitter  # 1.2 seconds + jitter
-    assert n_trials == conditions.size == cross_durations.size, (
-        "Size mismatch of arrays."
-    )
+    trial_indices = np.arange(n_trials)
+    rng.shuffle(trial_indices)
 
-    # Give a stop signal on 33 % of the trials
+    conditions = np.repeat(blocks, trials_per_block)
+    conditions = conditions[trial_indices]
+
+    jitter = rng.uniform(low=-0.25, high=0.25, size=n_trials)
+    cross_durations = 1.2 + jitter
+    assert n_trials == len(conditions) == len(cross_durations)
+
+    # 33% Stop Trials
     n_stop_trials = trials_per_block * 1 / 3
     if not n_stop_trials.is_integer():
         raise ValueError("Number of trials per block must be divisible by 5.")
@@ -238,18 +251,15 @@ def run(win: visual.Window, dataFile: TextIOWrapper, objFile: BufferedWriter) ->
     stop_trials = np.array(
         [[1] * n_stop_trials + [0] * n_go_trials] * n_blocks
     ).flatten()
-    stop_trials = stop_trials[trials]
+    stop_trials = stop_trials[trial_indices]
     print(f"Number of stop trials = {stop_trials.sum()}")
 
-    # __________________________________________________________________
-    # Start experiment
+    def pick_rects(num: int) -> list[visual.Rect]:
+        """Zieht num verschiedene Rechtecke ohne Wiederholung."""
+        idxs = rng.choice(len(all_rects), size=num, replace=False)
+        return [all_rects[i] for i in idxs]
 
-    # Show welcome screen
-    welcome_message = visual.TextStim(
-        win=win, text="Willkommen zu unserer Untersuchung!", color="white", height=0.07
-    )
-    draw_and_wait(start_with_space, welcome_message, win)
-
+    # Daten-Header
     header_items = {
         "Trial": "%i",
         "Condition": "%i",
@@ -264,72 +274,106 @@ def run(win: visual.Window, dataFile: TextIOWrapper, objFile: BufferedWriter) ->
         "Position_X": "%f",
         "Position_Y\n": "%f\n",
     }
-    header = (",").join(header_items.keys())
+    header = ",".join(header_items.keys())
     header_len = len(header_items)
-    format_str = (",").join(header_items.values())
+    format_str = ",".join(header_items.values())
     dataFile.write(header)
-    # __________________________________________________________________
-    # Loop over trials
+
     break_message = visual.TextStim(win=win, text="Pause", color="white", height=0.07)
     total_time = core.Clock()
     trial_time = core.Clock()
-    for trial, condition, cross_duration in zip(
-        np.arange(n_trials), conditions, cross_durations
+
+    # Haupt-Schleife
+    for trial_idx, condition, cross_duration in zip(
+        range(n_trials), conditions, cross_durations
     ):
-        if trial > 1 and not trial % 30:
+        if trial_idx > 1 and trial_idx % 30 == 0:
             draw_and_wait(continue_with_space, break_message, win)
 
-        print(f"Trial no.: {trial + 1}/{n_trials}")
-        # Target objects, make sure that the position varies from one trial to the next
-        ids = rng.choice(3, 3, replace=False)
-        objects_trial = [rectangles[ids[0]]]
+        print(f"Trial no.: {trial_idx + 1}/{n_trials}")
+
+        # ------------------------------------------------------------
+        # Condition 0 => 2 Vierecke
+        # Condition 1 => 4 Vierecke
+        # Condition 2 => 2 Vierecke + "Keine Bewegung" (Oval+Text)
+        # Condition 3 => 1 Viereck  + "Keine Bewegung" (Oval+Text)
+        #
+        # => Wir überschreiten so nie 4 sichtbare Objekte
+        # ------------------------------------------------------------
+        objects_trial = []
+
         if condition == 0:
-            objects_trial.append(rectangles[ids[1]])
+            # 2 Vierecke
+            squares = pick_rects(2)
+            pos_ids = rng.choice(n_pos, size=2, replace=False)
+            for i, sq in enumerate(squares):
+                sq.pos = positions[pos_ids[i]]
+            objects_trial = squares
+
         elif condition == 1:
-            objects_trial.extend([rectangles[ids[1]], rectangles[ids[2]]])
+            # 4 Vierecke
+            squares = pick_rects(4)
+            pos_ids = rng.choice(n_pos, size=4, replace=False)
+            for i, sq in enumerate(squares):
+                sq.pos = positions[pos_ids[i]]
+            objects_trial = squares
+
         elif condition == 2:
-            objects_trial.append(no_mov_text)
+            # 2 Vierecke + Keine Bewegung => 4 Objekte gesamt
+            squares = pick_rects(2)
+            pos_ids = rng.choice(n_pos, size=3, replace=False)
+            # => 2 Positionen für die Vierecke + 1 für Oval+Text
+            for i, sq in enumerate(squares):
+                sq.pos = positions[pos_ids[i]]
+            no_mov_oval.pos = positions[pos_ids[-1]]
+            no_mov_text.pos = positions[pos_ids[-1]]
+            objects_trial = squares + [no_mov_oval, no_mov_text]
+
         elif condition == 3:
-            objects_trial.extend([rectangles[ids[1]], no_mov_text])
+            # 1 Viereck + Keine Bewegung => 3 Objekte
+            squares = pick_rects(1)
+            pos_ids = rng.choice(n_pos, size=2, replace=False)
+            # => 1 Position für das Viereck + 1 für Oval+Text
+            squares[0].pos = positions[pos_ids[0]]
+            no_mov_oval.pos = positions[pos_ids[1]]
+            no_mov_text.pos = positions[pos_ids[1]]
+            objects_trial = squares + [no_mov_oval, no_mov_text]
+
         else:
             raise ValueError(f"Condition must be between 0 and 3. Got: {condition}.")
 
-        # Choose a random position for every object
-        ids_pos = rng.choice(n_pos, len(objects_trial), replace=False)
-        trial_positions = positions[ids_pos]
-        for obj, pos in zip(objects_trial, trial_positions):
-            obj.pos = pos
-        np.save(objFile, trial_positions)
+        # Positionen in .npy speichern (optional)
+        obj_positions = [obj.pos for obj in objects_trial]
+        np.save(objFile, obj_positions)
 
-        # Reset variables
+        # Trial-Variablen
         cross.lineColor = "white"
-        stop_trial = stop_trials[trial]
+        stop_trial = stop_trials[trial_idx]
         stopped = 0
         obj_visited = 0
         end_trial = 0
 
-        # Pen has to get close to fixation cross
+        # Warte, bis Maus in Nähe Fixationskreuz ist
         while not np.sum(np.abs(mouse.getPos() - cross_pos)) < threshold_mov:
             if HAS_KB_CALLBACK:
                 kb.getKeys()
             cross.draw()
             win.flip()
 
-        # Change color of cross if pen is close enough
+        # Kreuz wird rot
         cross.lineColor = "red"
 
+        # Warte cross_duration
         trial_time.reset()
         targets_displayed = 0
-        # Now wait for X seconds before displaying targets
         while (time_elapsed := trial_time.getTime()) < cross_duration:
             if HAS_KB_CALLBACK:
                 kb.getKeys()
             cross.draw()
-            # Save data
             mouse_pos = mouse.getPos()
             is_moving = np.sum(np.abs(mouse_pos - cross_pos)) > threshold_mov
             data_to_write = (
-                trial,
+                trial_idx,
                 condition,
                 stop_trial,
                 targets_displayed,
@@ -342,47 +386,58 @@ def run(win: visual.Window, dataFile: TextIOWrapper, objFile: BufferedWriter) ->
                 mouse_pos[0],
                 mouse_pos[1],
             )
-            if not len(data_to_write) == header_len:
-                raise ValueError(
-                    f"Data to write has {len(data_to_write)} columns. Expected {header_len}."
-                )
+            if len(data_to_write) != header_len:
+                raise ValueError("Data to write has incorrect number of columns.")
             dataFile.write(format_str % data_to_write)
             win.flip()
 
-        is_moving = False
+        # Targets einblenden
         trial_time.reset()
         timer_on_end = core.CountdownTimer(1.0)
-        # Now display the targets
         targets_displayed = 1
-        while not end_trial or timer_on_end.getTime() > 0:
+
+        while (not end_trial) or (timer_on_end.getTime() > 0):
             if not stopped:
-                # Draw targets (rectangles and cross)
-                for obj in objects_trial:
-                    obj.draw()
+                # Alle Objekte zeichnen
+                i = 0
+                while i < len(objects_trial):
+                    obj = objects_trial[i]
+                    # Oval+Text zusammen
+                    if (
+                        obj == no_mov_oval
+                        and i + 1 < len(objects_trial)
+                        and objects_trial[i + 1] == no_mov_text
+                    ):
+                        obj.draw()  # Oval
+                        objects_trial[i + 1].draw()  # Text
+                        i += 2
+                        continue
+                    else:
+                        obj.draw()
+                    i += 1
             else:
                 stop_text.draw()
+
             win.flip()
             time_elapsed = trial_time.getTime()
             mouse_pos = mouse.getPos()
 
-            # Check the distance of the mouse from each object
+            # Prüfen, ob ein Rechteck "besucht" wurde
             if not obj_visited:
                 for obj in objects_trial:
-                    if not isinstance(obj, visual.Rect):
-                        continue
-                    dist = np.sum(np.abs(mouse_pos - obj.pos))
-                    if dist < rect_size:
-                        obj_visited = 1
-                        if not end_trial:
-                            obj.fillColor = "red"
-                            timer_on_end.reset()
+                    if isinstance(obj, visual.Rect):
+                        dist = np.sum(np.abs(mouse_pos - obj.pos))
+                        if dist < rect_size:
+                            obj_visited = 1
+                            if not end_trial:
+                                obj.fillColor = "red"
+                                timer_on_end.reset()
 
-            # Check whether movement has started to potentially trigger the stop signal
+            # Bewegung -> ggf. STOP-Signal
             is_moving = np.sum(np.abs(mouse_pos - cross_pos)) > threshold_mov
 
-            # Save data before checking for stop signal, to account for delay in win.flip
             data_to_write = (
-                trial,
+                trial_idx,
                 condition,
                 stop_trial,
                 targets_displayed,
@@ -395,28 +450,32 @@ def run(win: visual.Window, dataFile: TextIOWrapper, objFile: BufferedWriter) ->
                 mouse_pos[0],
                 mouse_pos[1],
             )
-            if not len(data_to_write) == header_len:
-                raise ValueError(
-                    f"Data to write has {len(data_to_write)} columns. Expected {header_len}."
-                )
+            if len(data_to_write) != header_len:
+                raise ValueError("Data to write has incorrect number of columns.")
             dataFile.write(format_str % data_to_write)
 
-            if stop_trial and not end_trial and is_moving:
+            if stop_trial and (not end_trial) and is_moving:
                 win.color = stop_color_win
                 win.flip()  # Changing window color takes 2 flips
                 stopped = 1
                 timer_on_end.reset()
+
             end_trial = stopped or obj_visited
+
             if HAS_KB_CALLBACK:
                 kb.getKeys()
+
+            # Falls Condition > 1 und keine Bewegung => Trial-Abbruch nach 2.3s
             if condition > 1 and not end_trial and not is_moving and time_elapsed > 2.3:
                 break
-        if stopped:  # reset window color
-            win.color = "black"  # Changing window color takes 2 flips
+
+        # Cleanup nach Trial
+        if stopped:
+            win.color = "black"
             win.flip()
-        elif obj_visited:  # reset original rectangle colors
-            for color, rect in zip(colors, rectangles):
-                rect.fillColor = color
+        elif obj_visited:
+            for c, rect in zip(colors, all_rects):
+                rect.fillColor = c
         win.flip()
 
     logging.log("Ending experiment normally.", level=logging.INFO)
