@@ -90,14 +90,15 @@ def setupWindow() -> visual.Window:
     return win
 
 
-def draw_and_wait(
-    skip_with_space: visual.TextStim,
-    message: visual.TextStim,
+def display_break_message(
+    break_message: visual.TextStim,
+    cross: visual.ShapeStim,
     win: visual.Window,
 ):
     """Zeigt eine Nachricht und wartet auf SPACE oder ESC."""
-    message.draw()
-    skip_with_space.draw(win)
+    break_message.draw()
+    cross.lineColor = "white"
+    cross.draw()
     win.flip()
     while True:
         keys = event.getKeys()
@@ -106,6 +107,9 @@ def draw_and_wait(
         elif "escape" in keys:
             store_and_quit(win=win)
         time.sleep(0.1)
+    cross.draw()
+    win.flip()
+    core.wait(1.0)
 
 
 def store_and_quit(win: visual.Window):
@@ -147,20 +151,6 @@ def run(win: visual.Window, dataFile: TextIOWrapper, objFile: BufferedWriter) ->
             key="escape", func=store_and_quit, func_kwargs={"win": win}
         )
 
-    start_with_space = visual.TextStim(
-        win=win,
-        text="Leertaste drücken um zu starten",
-        pos=(0.0, -0.25),
-        height=0.03,
-        color="white",
-    )
-    continue_with_space = visual.TextStim(
-        win=win,
-        text="Leertaste drücken um weiterzumachen",
-        pos=(0.0, -0.25),
-        height=0.03,
-        color="white",
-    )
     stop_text = visual.TextStim(
         win=win, text="STOP", height=0.14, pos=(0.0, 0.15), color="white", bold=True
     )
@@ -181,7 +171,7 @@ def run(win: visual.Window, dataFile: TextIOWrapper, objFile: BufferedWriter) ->
     # "Keine Bewegung": Grünes Oval + Weißer Text
     no_mov_text = visual.TextStim(
         win=win,
-        text="Keine Bewegung",
+        text="Bewegung\nOptional",
         color="white",
         height=0.04,
         bold=True,
@@ -189,10 +179,8 @@ def run(win: visual.Window, dataFile: TextIOWrapper, objFile: BufferedWriter) ->
     no_mov_oval = visual.ShapeStim(
         win=win,
         vertices="circle",
-        size=(0.4, 0.2),  # Oval genug, damit Text nicht überlappt
-        fillColor="lime",
-        lineColor="lime",
-        lineWidth=2,
+        size=(0.3, 0.2),  # Oval genug, damit Text nicht überlappt
+        fillColor="green",
     )
 
     threshold_mov = 0.1
@@ -203,7 +191,7 @@ def run(win: visual.Window, dataFile: TextIOWrapper, objFile: BufferedWriter) ->
     cross = visual.ShapeStim(
         win=win,
         lineColor="gray",
-        lineWidth=8,
+        lineWidth=16,
         vertices=(
             (cross_pos[0], cross_pos[1] - cross_size),
             (cross_pos[0], cross_pos[1] + cross_size),
@@ -279,7 +267,12 @@ def run(win: visual.Window, dataFile: TextIOWrapper, objFile: BufferedWriter) ->
     format_str = ",".join(header_items.values())
     dataFile.write(header)
 
-    break_message = visual.TextStim(win=win, text="Pause", color="white", height=0.07)
+    break_message = visual.TextStim(
+        win=win,
+        text="Pause\n\n\nLeertaste drücken um weiterzumachen",
+        color="white",
+        height=0.07,
+    )
     total_time = core.Clock()
     trial_time = core.Clock()
 
@@ -288,14 +281,14 @@ def run(win: visual.Window, dataFile: TextIOWrapper, objFile: BufferedWriter) ->
         range(n_trials), conditions, cross_durations
     ):
         if trial_idx > 1 and trial_idx % 30 == 0:
-            draw_and_wait(continue_with_space, break_message, win)
+            display_break_message(break_message, cross, win)
 
         print(f"Trial no.: {trial_idx + 1}/{n_trials}")
 
         # ------------------------------------------------------------
         # Condition 0 => 2 Vierecke
         # Condition 1 => 4 Vierecke
-        # Condition 2 => 2 Vierecke + "Keine Bewegung" (Oval+Text)
+        # Condition 2 => 3 Vierecke + "Keine Bewegung" (Oval+Text)
         # Condition 3 => 1 Viereck  + "Keine Bewegung" (Oval+Text)
         #
         # => Wir überschreiten so nie 4 sichtbare Objekte
@@ -319,10 +312,10 @@ def run(win: visual.Window, dataFile: TextIOWrapper, objFile: BufferedWriter) ->
             objects_trial = squares
 
         elif condition == 2:
-            # 2 Vierecke + Keine Bewegung => 4 Objekte gesamt
-            squares = pick_rects(2)
-            pos_ids = rng.choice(n_pos, size=3, replace=False)
-            # => 2 Positionen für die Vierecke + 1 für Oval+Text
+            # 3 Vierecke + Keine Bewegung => 4 Objekte gesamt
+            squares = pick_rects(3)
+            # 3 Positionen für die Vierecke + 1 für Oval+Text
+            pos_ids = rng.choice(n_pos, size=4, replace=False)
             for i, sq in enumerate(squares):
                 sq.pos = positions[pos_ids[i]]
             no_mov_oval.pos = positions[pos_ids[-1]]
@@ -332,8 +325,8 @@ def run(win: visual.Window, dataFile: TextIOWrapper, objFile: BufferedWriter) ->
         elif condition == 3:
             # 1 Viereck + Keine Bewegung => 3 Objekte
             squares = pick_rects(1)
+            # 1 Position für das Viereck + 1 für Oval+Text
             pos_ids = rng.choice(n_pos, size=2, replace=False)
-            # => 1 Position für das Viereck + 1 für Oval+Text
             squares[0].pos = positions[pos_ids[0]]
             no_mov_oval.pos = positions[pos_ids[1]]
             no_mov_text.pos = positions[pos_ids[1]]
